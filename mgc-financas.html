@@ -2432,8 +2432,15 @@ document.getElementById('filterMonth').addEventListener('change', renderDashboar
 // Install prompt (Android Chrome)
 let _pwaPrompt = null;
 const _isStandalone = window.matchMedia('(display-mode: standalone)').matches
-                   || window.navigator.standalone === true
-                   || localStorage.getItem('pwaInstalled') === '1';
+                   || window.navigator.standalone === true;
+
+// Se já está instalado/standalone, marca flag e garante banner oculto imediatamente
+if (_isStandalone) {
+    localStorage.setItem('pwaInstalled', '1');
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('installBanner').classList.remove('show');
+    });
+}
 
 window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
@@ -2454,7 +2461,7 @@ function pwaTriggerInstall() {
 }
 function pwaDismissBanner() {
     document.getElementById('installBanner').classList.remove('show');
-    sessionStorage.setItem('pwaBannerDismissed', '1');
+    localStorage.setItem('pwaInstalled', '1');
 }
 
 // iOS install hint (not standalone, on iOS Safari)
