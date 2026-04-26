@@ -2431,21 +2431,26 @@ document.getElementById('filterMonth').addEventListener('change', renderDashboar
 
 // Install prompt (Android Chrome)
 let _pwaPrompt = null;
+const _isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                   || window.navigator.standalone === true
+                   || localStorage.getItem('pwaInstalled') === '1';
+
 window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     _pwaPrompt = e;
-    if (!sessionStorage.getItem('pwaBannerDismissed'))
+    if (!_isStandalone && !localStorage.getItem('pwaInstalled') && !sessionStorage.getItem('pwaBannerDismissed'))
         setTimeout(() => document.getElementById('installBanner').classList.add('show'), 2500);
 });
 window.addEventListener('appinstalled', () => {
     document.getElementById('installBanner').classList.remove('show');
     _pwaPrompt = null;
+    localStorage.setItem('pwaInstalled', '1');
     toast('MGC Finanças instalado!', 'success');
 });
 
 function pwaTriggerInstall() {
     document.getElementById('installBanner').classList.remove('show');
-    if (_pwaPrompt) { _pwaPrompt.prompt(); _pwaPrompt.userChoice.then(() => { _pwaPrompt = null; }); }
+    if (_pwaPrompt) { _pwaPrompt.prompt(); _pwaPrompt.userChoice.then(c => { if (c.outcome === 'accepted') localStorage.setItem('pwaInstalled', '1'); _pwaPrompt = null; }); }
 }
 function pwaDismissBanner() {
     document.getElementById('installBanner').classList.remove('show');
