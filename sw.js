@@ -1,5 +1,5 @@
 const CACHE = 'mgc-v1';
-const SHELL = [location.pathname || '/Dashboard_Financeiro_MarlonCosta_v4.html'];
+const SHELL = ['./mgc-financas.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
     e.waitUntil(
