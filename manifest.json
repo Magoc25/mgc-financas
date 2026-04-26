@@ -2,7 +2,7 @@
   "name": "MGC Finanças",
   "short_name": "MGC",
   "description": "Planejamento financeiro pessoal",
-  "start_url": "./Dashboard_Financeiro_MarlonCosta_v4.html",
+  "start_url": "./mgc-financas.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",
