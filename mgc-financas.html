@@ -98,7 +98,6 @@
             .mob-section { display: none !important; }
             .mob-section.mob-active { display: block !important; }
             #mainFormSection { display: none; }
-            /* compact header exports */
             #headerExportRow { display: none !important; }
             /* bigger tap targets */
             .action-btn { min-width: 30px; min-height: 30px; font-size: 0.95rem; }
@@ -293,14 +292,6 @@
         .chart-export-btn:hover { background: #f1f5f9; }
         html.dark .chart-export-btn { border-color: #334155; }
         html.dark .chart-export-btn:hover { background: #334155; }
-
-        /* Compact mode */
-        body.compact #kpiGrid > div { padding: 0.55rem 0.75rem !important; }
-        body.compact #kpiGrid h3 { font-size: 0.6rem !important; }
-        body.compact #kpiGrid .text-xl, body.compact #kpiGrid .lg\:text-2xl { font-size: 0.95rem !important; }
-        body.compact #kpiGrid .text-lg { font-size: 0.875rem !important; }
-        body.compact .space-y-6 > * + * { margin-top: 0.75rem !important; }
-        body.compact .p-6 { padding: 0.875rem !important; }
 
         /* Sortable headers */
         .sort-th { cursor: pointer; user-select: none; transition: color 0.15s; }
@@ -563,8 +554,7 @@ on conflict (id) do nothing;</div>
             <button onclick="toggleDarkMode()" id="darkToggleBtn" title="Alternar tema" class="dark-toggle-btn w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-lg hover:bg-gray-100 transition"><span id="darkBtnIcon">🌙</span></button>
             <button onclick="abrirManager('cat')" title="Categorias &amp; Cartões" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition">🏷</button>
             <button onclick="abrirSettings()" title="Configurar Supabase" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition">⚙</button>
-            <button onclick="toggleCompactMode()" id="compactBtn" title="Modo compacto" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition"><span id="compactBtnIcon">⊟</span></button>
-            <button onclick="abrirHistorico()" title="Histórico de alterações" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition">📋</button>
+<button onclick="abrirHistorico()" title="Histórico de alterações" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition">📋</button>
             <button onclick="document.getElementById('pinModal').classList.remove('hidden')" title="Configurar PIN" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition" id="pinConfigBtn">🔓</button>
             <button onclick="bloquearDashboard()" title="Bloquear dashboard" id="lockBtn" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition hidden">🔒</button>
         </div>
@@ -949,7 +939,6 @@ const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 const MONTH_COUNT    = 24;
 const STORAGE_KEY    = 'financeAppV6_Personalized';
-const COMPACT_KEY    = 'finCompact';
 const DARK_KEY       = 'finDark';
 
 function gerarMeses(n) {
@@ -976,8 +965,7 @@ const COLOR_PALETTE = {
 };
 
 function getCategorias() {
-    const extras = (appData.categorias || []).filter(c => !PREDEFINED_CATEGORIES.includes(c));
-    return [...PREDEFINED_CATEGORIES, ...extras];
+    return (appData.categorias && appData.categorias.length > 0) ? [...appData.categorias] : [...PREDEFINED_CATEGORIES];
 }
 function getCartoes() {
     return (appData.cartoes && appData.cartoes.length > 0) ? appData.cartoes : [...PREDEFINED_CARDS];
@@ -998,7 +986,13 @@ function normalizarAppData(data) {
     if (!data.fixas)     data.fixas     = [];
     if (!data.dividas)   data.dividas   = [];
     if (data.meta == null) data.meta    = 0;
-    if (!data.categorias) data.categorias = [];
+    if (!data.categoriasV2) {
+        // migrate: old format stored only extras; new format stores full list
+        const extras = (data.categorias || []).filter(c => !PREDEFINED_CATEGORIES.includes(c));
+        data.categorias = [...PREDEFINED_CATEGORIES, ...extras];
+        data.categoriasV2 = true;
+    }
+    if (!data.categorias || data.categorias.length === 0) data.categorias = [...PREDEFINED_CATEGORIES];
     if (!data.cartoes)    data.cartoes  = [...PREDEFINED_CARDS];
     if (!data.limites)    data.limites  = {};
     if (!data.metas)      data.metas    = [];
@@ -1197,8 +1191,9 @@ function renderManagerModal() {
         const cats = getCategorias();
         const limites = appData.limites || {};
         document.getElementById('categoriasList').innerHTML = cats.map(cat => {
-            const isPredefined = PREDEFINED_CATEGORIES.includes(cat);
-            const removeBtn = isPredefined ? `<span class="text-xs text-gray-300">padrão</span>` : `<button class="tag-remove" onclick="removerCategoria('${cat}')" title="Remover">✕</button>`;
+            const removeBtn = cats.length > 1
+                ? `<button class="tag-remove" onclick="removerCategoria('${cat}')" title="Remover">✕</button>`
+                : `<span class="text-xs text-gray-300">única</span>`;
             const limite = limites[cat] || '';
             return `<div class="manager-tag">
                 <span style="width:8px;height:8px;border-radius:50%;background:${getColor(cat)};display:inline-block;flex-shrink:0"></span>
@@ -1230,7 +1225,7 @@ function adicionarCategoria() {
 }
 
 function removerCategoria(nome) {
-    if (PREDEFINED_CATEGORIES.includes(nome)) { toast('Não é possível remover categorias padrão.', 'error'); return; }
+    if (appData.categorias.length <= 1) { toast('Precisa de pelo menos 1 categoria.', 'error'); return; }
     appData.categorias = appData.categorias.filter(c => c !== nome);
     delete appData.limites[nome];
     salvarDados(); rebuildFormSelects(); renderManagerModal();
@@ -1672,18 +1667,6 @@ function filtrarPorBusca(q) {
             tr.style.display = (!_searchQuery || tr.textContent.toLowerCase().includes(_searchQuery)) ? '' : 'none';
         });
     });
-}
-
-function toggleCompactMode() {
-    const on = document.body.classList.toggle('compact');
-    localStorage.setItem(COMPACT_KEY, on);
-    document.getElementById('compactBtnIcon').textContent = on ? '⊞' : '⊟';
-    toast(on ? 'Modo compacto ativado' : 'Modo normal ativado', 'info');
-}
-// Restore compact preference
-if (localStorage.getItem(COMPACT_KEY) === 'true') {
-    document.body.classList.add('compact');
-    document.getElementById('compactBtnIcon').textContent = '⊞';
 }
 
 // ============================================================
@@ -2435,24 +2418,26 @@ let _pwaPrompt = null;
 const _isStandalone = window.matchMedia('(display-mode: standalone)').matches
                    || window.navigator.standalone === true;
 
-// Se já está instalado/standalone, marca flag e garante banner oculto imediatamente
 if (_isStandalone) {
     localStorage.setItem('pwaInstalled', '1');
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('installBanner').classList.remove('show');
-    });
 }
 
 window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     _pwaPrompt = e;
-    if (!_isStandalone && !localStorage.getItem('pwaInstalled') && !sessionStorage.getItem('pwaBannerDismissed'))
+    const alreadyInstalled = localStorage.getItem('pwaInstalled');
+    const dismissed        = localStorage.getItem('pwaBannerDismissed');
+    const shownThisSession = sessionStorage.getItem('pwaBannerShown');
+    if (!_isStandalone && !alreadyInstalled && !dismissed && !shownThisSession) {
+        sessionStorage.setItem('pwaBannerShown', '1');
         setTimeout(() => document.getElementById('installBanner').classList.add('show'), 2500);
+    }
 });
 window.addEventListener('appinstalled', () => {
     document.getElementById('installBanner').classList.remove('show');
     _pwaPrompt = null;
     localStorage.setItem('pwaInstalled', '1');
+    localStorage.removeItem('pwaBannerDismissed');
     toast('MGC Finanças instalado!', 'success');
 });
 
@@ -2462,7 +2447,7 @@ function pwaTriggerInstall() {
 }
 function pwaDismissBanner() {
     document.getElementById('installBanner').classList.remove('show');
-    localStorage.setItem('pwaInstalled', '1');
+    localStorage.setItem('pwaBannerDismissed', '1');
 }
 
 // iOS install hint (not standalone, on iOS Safari)
@@ -2601,9 +2586,6 @@ inicializar();
         </button>
         <button class="mais-btn" onclick="fecharMaisSheet();document.getElementById('pinModal').classList.remove('hidden')">
             <span class="mais-icon">🔒</span> Configurar PIN
-        </button>
-        <button class="mais-btn" onclick="fecharMaisSheet();toggleCompactMode()">
-            <span class="mais-icon">⊟</span> Alternar Modo Compacto
         </button>
         <button class="mais-btn" onclick="fecharMaisSheet();abrirSettings()">
             <span class="mais-icon">⚙</span> Configurar Supabase
