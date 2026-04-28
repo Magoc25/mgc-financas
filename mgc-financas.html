@@ -1901,15 +1901,12 @@ function renderBarChart(monthlyFaturasTotals, monthlyDividasTotals) {
     if (chartInstance) chartInstance.destroy();
     const txtColor  = chartTextColor();
     const gridColor = chartGridColor();
-    const poupancaLine = monthlyFaturasTotals.map((v, i) => Math.max(0, RENDA_MENSAL - v - TOTAL_FIXED - monthlyDividasTotals[i]));
-
     chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: monthNames,
             datasets: [
                 { type: 'line', label: 'Renda Mensal', data: new Array(visibleMonths).fill(RENDA_MENSAL), borderColor: 'rgba(16,185,129,1)', borderWidth: 2, borderDash: [5,5], pointRadius: 0, fill: false },
-                { type: 'line', label: 'Poupança', data: poupancaLine, borderColor: 'rgba(250,204,21,1)', backgroundColor: 'rgba(250,204,21,0.1)', borderWidth: 1.5, pointRadius: 2, fill: true, tension: 0.3 },
                 { type: 'bar',  label: 'Dívidas / Cheque', data: monthlyDividasTotals, backgroundColor: 'rgba(220,38,38,0.8)', borderColor: 'rgba(185,28,28,1)', borderWidth: 1 },
                 { type: 'bar',  label: 'Faturas (Cartão)', data: monthlyFaturasTotals, backgroundColor: 'rgba(59,130,246,0.8)', borderColor: 'rgba(37,99,235,1)', borderWidth: 1 },
                 { type: 'bar',  label: 'Despesas Fixas', data: new Array(visibleMonths).fill(TOTAL_FIXED), backgroundColor: 'rgba(249,115,22,0.8)', borderColor: 'rgba(234,88,12,1)', borderWidth: 1, borderRadius: { topLeft: 4, topRight: 4 } }
