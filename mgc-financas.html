@@ -551,7 +551,6 @@ on conflict (id) do nothing;</div>
     <div>
         <div class="flex items-center gap-2 flex-wrap">
             <h1 class="text-4xl font-extrabold text-blue-600 tracking-tight">Planejamento Financeiro</h1>
-            <span id="appVersionBadge" class="text-xs font-semibold text-gray-400 bg-gray-100 rounded px-2 py-0.5 self-end mb-1"></span>
             <button onclick="toggleDarkMode()" id="darkToggleBtn" title="Alternar tema" class="dark-toggle-btn w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-lg hover:bg-gray-100 transition"><span id="darkBtnIcon">🌙</span></button>
             <button onclick="abrirManager('cat')" title="Categorias &amp; Cartões" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition">🏷</button>
             <button onclick="abrirSettings()" title="Configurar Supabase" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-base hover:bg-gray-100 transition">⚙</button>
@@ -1392,7 +1391,6 @@ function salvarDados() {
 }
 
 async function inicializar() {
-    document.getElementById('appVersionBadge').textContent = 'v' + APP_VERSION;
     document.getElementById('appVersionFooter').textContent = 'v' + APP_VERSION;
     rebuildMonthSelects();
     rebuildFormSelects();
