@@ -267,6 +267,22 @@
         /* Alert banner */
         .alert-banner { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 16px; }
         html.dark .alert-banner { background: rgba(239,68,68,0.1) !important; border-color: rgba(239,68,68,0.3) !important; }
+
+        /* Pagamentos checklist */
+        .pag-item { display:flex; align-items:center; gap:0.5rem; padding:0.45rem 0.6rem; border-radius:8px; cursor:pointer; transition:background 0.15s; border:1px solid transparent; user-select:none; }
+        .pag-item:hover { background:#f8fafc; }
+        .pag-item.pago { background:#f0fdf4; border-color:#bbf7d0; }
+        .pag-item input[type="checkbox"] { width:1rem; height:1rem; accent-color:#10b981; cursor:pointer; flex-shrink:0; pointer-events:none; }
+        .pag-nome { flex:1; font-size:0.85rem; font-weight:500; color:#374151; transition:color 0.15s; }
+        .pag-item.pago .pag-nome { text-decoration:line-through; color:#9ca3af; }
+        .pag-valor { font-size:0.82rem; font-weight:600; color:#6b7280; flex-shrink:0; }
+        .pag-item.pago .pag-valor { color:#10b981; }
+        html.dark .pag-item:hover { background:#334155; }
+        html.dark .pag-item.pago { background:rgba(16,185,129,0.08); border-color:rgba(16,185,129,0.25); }
+        html.dark .pag-nome { color:#e2e8f0; }
+        html.dark .pag-item.pago .pag-nome { color:#64748b; }
+        html.dark .pag-valor { color:#94a3b8; }
+        html.dark .pag-item.pago .pag-valor { color:#34d399; }
         .alert-chip { display: inline-flex; align-items: center; gap: 4px; background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 20px; font-size: 11px; padding: 2px 10px; font-weight: 600; margin: 2px; }
         html.dark .alert-chip { background: rgba(239,68,68,0.2) !important; color: #fca5a5 !important; border-color: rgba(239,68,68,0.4) !important; }
 
@@ -723,6 +739,42 @@ on conflict (id) do nothing;</div>
     <p id="narrativeText" class="text-sm text-sky-800 leading-relaxed" style="color:inherit"></p>
 </div>
 
+<!-- CONTROLE DE PAGAMENTOS -->
+<div class="bg-white rounded-lg shadow-md overflow-hidden" id="pagamentosPanel">
+    <button onclick="togglePagPanel()" class="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition">
+        <div class="flex items-center gap-2">
+            <span class="text-base font-semibold text-gray-800">💳 Controle de Pagamentos</span>
+            <span id="pagMesLabel" class="text-xs font-medium text-gray-400 bg-gray-100 rounded px-2 py-0.5"></span>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="pagResumoHeader" class="text-xs font-semibold text-emerald-600 hidden"></span>
+            <span id="pagChevron" class="text-gray-400 text-sm transition-transform duration-200">▼</span>
+        </div>
+    </button>
+    <div id="pagamentosBody" class="px-5 pb-5">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Despesas Fixas</h3>
+                <div id="pagFixasList" class="space-y-1"></div>
+            </div>
+            <div>
+                <h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Faturas de Cartão</h3>
+                <div id="pagCartoesList" class="space-y-1"></div>
+            </div>
+        </div>
+        <div class="pt-3 border-t border-gray-100">
+            <div class="flex justify-between text-sm mb-1.5">
+                <span class="font-semibold text-emerald-600">✓ Pago: <span id="pagTotalPago">R$ 0,00</span></span>
+                <span class="font-semibold text-orange-500">● A pagar: <span id="pagTotalAberto">R$ 0,00</span></span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div id="pagProgressBar" class="h-2 rounded-full bg-emerald-500 transition-all duration-500" style="width:0%"></div>
+            </div>
+            <p id="pagProgressText" class="text-xs text-gray-400 mt-1 text-right"></p>
+        </div>
+    </div>
+</div>
+
 </div><!-- /secInicio -->
 
 <!-- ── SECTION: GRÁFICOS ───────────────────────────────── -->
@@ -998,6 +1050,7 @@ function normalizarAppData(data) {
     if (!data.limites)    data.limites  = {};
     if (!data.metas)      data.metas    = [];
     if (!data.historico)  data.historico = [];
+    if (!data.pagamentos) data.pagamentos = {};
     // Migrate legacy single meta
     if (data.meta > 0 && data.metas.length === 0) {
         data.metas.push({ id: Date.now(), name: 'Meta Mensal', target: data.meta * 12, mensal: data.meta, acumulado: 0 });
@@ -1672,6 +1725,114 @@ function filtrarPorBusca(q) {
 }
 
 // ============================================================
+// PAGAMENTOS
+// ============================================================
+let _pagPanelOpen = true;
+
+function togglePagPanel() {
+    _pagPanelOpen = !_pagPanelOpen;
+    document.getElementById('pagamentosBody').style.display = _pagPanelOpen ? '' : 'none';
+    document.getElementById('pagChevron').style.transform = _pagPanelOpen ? '' : 'rotate(-90deg)';
+    document.getElementById('pagResumoHeader').classList.toggle('hidden', _pagPanelOpen);
+}
+
+function _getMesPag() {
+    const sel = document.getElementById('filterMonth').value;
+    return sel === 'Todos' ? monthNames[0] : sel;
+}
+
+function _getPag(mes) {
+    if (!appData.pagamentos[mes]) appData.pagamentos[mes] = { fixas: [], cartoes: [] };
+    return appData.pagamentos[mes];
+}
+
+function togglePagFixa(idx) {
+    const mes = _getMesPag();
+    const p = _getPag(mes);
+    const nome = appData.fixas[idx].name;
+    const i = p.fixas.indexOf(nome);
+    if (i >= 0) p.fixas.splice(i, 1); else p.fixas.push(nome);
+    salvarDados(); renderPagamentos();
+}
+
+function togglePagCartao(cartao) {
+    const mes = _getMesPag();
+    const p = _getPag(mes);
+    const i = p.cartoes.indexOf(cartao);
+    if (i >= 0) p.cartoes.splice(i, 1); else p.cartoes.push(cartao);
+    salvarDados(); renderPagamentos();
+}
+
+function renderPagamentos() {
+    const mes = _getMesPag();
+    const p   = _getPag(mes);
+    const idx = monthNames.indexOf(mes);
+
+    document.getElementById('pagMesLabel').textContent = mes;
+
+    // per-card totals for this month
+    const cardTotals = {};
+    getCartoes().forEach(c => { cardTotals[c] = 0; });
+    processedData.forEach(item => {
+        const val = idx >= 0 ? (item.projections[idx] || 0) : 0;
+        if (val > 0) cardTotals[item.card] = (cardTotals[item.card] || 0) + val;
+    });
+
+    let totalGeral = 0, totalPago = 0;
+
+    // Fixas
+    let fixasHtml = '';
+    if (!appData.fixas.length) {
+        fixasHtml = '<p class="text-xs text-gray-400 italic px-2 py-1">Nenhuma despesa fixa cadastrada</p>';
+    } else {
+        appData.fixas.forEach((f, i) => {
+            const pago = p.fixas.includes(f.name);
+            totalGeral += f.amount;
+            if (pago) totalPago += f.amount;
+            fixasHtml += `<div class="pag-item ${pago ? 'pago' : ''}" onclick="togglePagFixa(${i})">
+                <input type="checkbox" ${pago ? 'checked' : ''}>
+                <span class="pag-nome">${f.name}</span>
+                <span class="pag-valor">${formatCurrency(f.amount)}</span>
+            </div>`;
+        });
+    }
+    document.getElementById('pagFixasList').innerHTML = fixasHtml;
+
+    // Cartões
+    let cartoesHtml = '';
+    const cartoes = getCartoes();
+    const temFatura = cartoes.some(c => cardTotals[c] > 0);
+    if (!temFatura) {
+        cartoesHtml = '<p class="text-xs text-gray-400 italic px-2 py-1">Sem fatura neste mês</p>';
+    } else {
+        cartoes.forEach(card => {
+            const val = cardTotals[card];
+            if (!val) return;
+            const pago = p.cartoes.includes(card);
+            totalGeral += val;
+            if (pago) totalPago += val;
+            cartoesHtml += `<div class="pag-item ${pago ? 'pago' : ''}" onclick="togglePagCartao('${card}')">
+                <input type="checkbox" ${pago ? 'checked' : ''}>
+                <span class="pag-nome">${card}</span>
+                <span class="pag-valor">${formatCurrency(val)}</span>
+            </div>`;
+        });
+    }
+    document.getElementById('pagCartoesList').innerHTML = cartoesHtml;
+
+    // Resumo
+    const aberto = totalGeral - totalPago;
+    const pct    = totalGeral > 0 ? Math.round((totalPago / totalGeral) * 100) : 0;
+    document.getElementById('pagTotalPago').textContent   = formatCurrency(totalPago);
+    document.getElementById('pagTotalAberto').textContent = formatCurrency(aberto);
+    document.getElementById('pagProgressBar').style.width = pct + '%';
+    document.getElementById('pagProgressText').textContent = totalGeral > 0 ? `${pct}% quitado de ${formatCurrency(totalGeral)}` : '';
+    const resumoEl = document.getElementById('pagResumoHeader');
+    resumoEl.textContent = `${pct}% quitado`;
+    resumoEl.className = `text-xs font-semibold rounded px-2 py-0.5 ${pct === 100 ? 'text-emerald-600 bg-emerald-50' : 'text-orange-500 bg-orange-50'}`;
+}
+
+// ============================================================
 // RENDERING
 // ============================================================
 let processedData    = [];
@@ -1873,6 +2034,9 @@ function renderDashboard() {
     // Tables
     renderDividasTable(selectedMonthIndex);
     renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTotals, selectedMonthIndex);
+
+    // Pagamentos
+    renderPagamentos();
 }
 
 function renderAlertBanner(categoryTotals, mesRef) {
