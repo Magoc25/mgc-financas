@@ -1860,13 +1860,34 @@ function processarDadosERenderizar() {
     TOTAL_FIXED  = appData.fixas.reduce((s, c) => s + c.amount, 0);
     RENDA_MENSAL = appData.rendas.reduce((s, c) => s + c.amount, 0);
 
+    // Converte "Mai/26" → número absoluto de meses para comparação correta entre meses passados
+    function _absMonth(str) {
+        const ab = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+        const [m, y] = str.split('/');
+        return (2000 + parseInt(y)) * 12 + ab.indexOf(m);
+    }
+    const _nowAbs = _absMonth(monthNames[0]);
+
     processedData = appData.faturas.map((item, idx) => {
         let projections = [], totalItemDebt = 0;
         const startIndex = item.mesInicio ? monthNames.indexOf(item.mesInicio) : 0;
-        const si = startIndex < 0 ? 0 : startIndex;
-        const remaining = (item.total - item.curr) + 1;
+        let si, remaining;
+
+        if (startIndex >= 0) {
+            // mesInicio está no presente ou futuro — comportamento normal
+            si = startIndex;
+            remaining = (item.total - item.curr) + 1;
+        } else {
+            // mesInicio está no passado: descontar meses já transcorridos
+            const itemAbs   = item.mesInicio ? _absMonth(item.mesInicio) : _nowAbs;
+            const elapsed   = _nowAbs - itemAbs;
+            const totalInst = (item.total - item.curr) + 1;
+            remaining = Math.max(0, totalInst - elapsed);
+            si = 0;
+        }
+
         for (let i = 0; i < visibleMonths; i++) {
-            if (i >= si && i < si + remaining) { projections.push(item.amount); totalItemDebt += item.amount; }
+            if (remaining > 0 && i >= si && i < si + remaining) { projections.push(item.amount); totalItemDebt += item.amount; }
             else projections.push(0);
         }
         return { ...item, category: item.category || 'Outros', projections, totalItemDebt, originalIndex: idx };
