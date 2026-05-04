@@ -5,6 +5,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.1.0] — Maio 2026
+
+### 🔧 Melhorado
+- **Detalhamento Faturas** — colunas Cartão, Categoria e Parcela agora ficam fixas ao rolar horizontalmente
+- **Detalhamento Faturas** — tabela abre posicionada no mês atual − 2, facilitando a leitura dos meses relevantes
+- **Formulário** — campo "Mês" volta ao mês atual após cada lançamento adicionado
+
+---
+
 ## [4.0.0] — Abril 2026
 
 ### 📱 Mobile e PWA

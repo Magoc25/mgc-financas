@@ -222,6 +222,16 @@
         .table-container { max-height: 500px; overflow-y: auto; overflow-x: auto; }
         th { position: sticky; top: 0; background-color: #f9fafb; z-index: 10; }
         html.dark th { background-color: #1e293b !important; }
+        /* sticky left cols — fatura table */
+        .fat-s1 { position: sticky; left: 0;     z-index: 2;  background: white; min-width: 110px; }
+        .fat-s2 { position: sticky; left: 110px; z-index: 2;  background: white; min-width: 175px; }
+        .fat-s3 { position: sticky; left: 285px; z-index: 2;  background: white; min-width: 70px;  box-shadow: 2px 0 5px rgba(0,0,0,0.07); }
+        thead .fat-s1, thead .fat-s2, thead .fat-s3 { background: #f9fafb; z-index: 15; }
+        tr:hover > .fat-s1, tr:hover > .fat-s2, tr:hover > .fat-s3 { background: #f9fafb; }
+        .bg-indigo-50 > .fat-s1, .bg-indigo-50 > .fat-s2, .bg-indigo-50 > .fat-s3 { background: #eef2ff; }
+        .bg-gray-800 > .fat-s1,  .bg-gray-800 > .fat-s2,  .bg-gray-800 > .fat-s3  { background: #1f2937; }
+        html.dark .fat-s1, html.dark .fat-s2, html.dark .fat-s3 { background: #0f172a; }
+        html.dark thead .fat-s1, html.dark thead .fat-s2, html.dark thead .fat-s3 { background: #1e293b; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -987,7 +997,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // ============================================================
 // CONFIG & HELPERS
 // ============================================================
-const APP_VERSION    = '4.0.0'; // atualizado por update-version.sh
+const APP_VERSION    = '4.1.0'; // atualizado por update-version.sh
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 const MONTH_COUNT    = 24;
@@ -1657,6 +1667,7 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
     this.reset();
     document.getElementById('newCurr').value  = 1;
     document.getElementById('newTotal').value = 1;
+    document.getElementById('newMonth').value = monthNames[HISTORY_COUNT];
     toggleFormFields();
     processarDadosERenderizar();
     toast('Lançamento adicionado!', 'success');
@@ -2388,15 +2399,15 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
     const tbody = table.querySelector('tbody');
 
     const thSortBase = 'px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100';
-    const mkFTh = (col, label, align = 'left') => {
+    const mkFTh = (col, label, align = 'left', extraClass = '') => {
         const dir = _sortStates[`faturas.${col}`];
         const arrow = dir === 1 ? ' ↑' : dir === -1 ? ' ↓' : '';
-        return `<th class="${thSortBase} text-${align}" onclick="sortarTabela('faturas','${col}')">${label}${arrow}</th>`;
+        return `<th class="${thSortBase} text-${align} ${extraClass}" onclick="sortarTabela('faturas','${col}')">${label}${arrow}</th>`;
     };
     let theadHTML = `<tr>
-        ${mkFTh('card','Cartão')}
-        ${mkFTh('category','Categoria / Loja')}
-        ${mkFTh('curr','Parcela','center')}`;
+        ${mkFTh('card','Cartão','left','fat-s1')}
+        ${mkFTh('category','Categoria / Loja','left','fat-s2')}
+        ${mkFTh('curr','Parcela','center','fat-s3')}`;
     for (let i = 0; i < visibleMonths; i++) {
         const hl = i === selectedMonthIndex ? 'bg-blue-100 text-blue-800' : '';
         theadHTML += `<th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider ${hl}">${monthNames[i]}</th>`;
@@ -2411,12 +2422,12 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
         aplicarSort(filteredData, 'faturas').forEach(item => {
             const badgeColor = item.card === 'Mercado Pago' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
             let row = `<tr class="hover:bg-gray-50 text-gray-700">
-                <td class="px-4 py-3 whitespace-nowrap"><span class="px-2 py-1 rounded text-xs font-medium ${badgeColor}">${item.card}</span></td>
-                <td class="px-4 py-3 whitespace-nowrap">
+                <td class="px-4 py-3 whitespace-nowrap fat-s1"><span class="px-2 py-1 rounded text-xs font-medium ${badgeColor}">${item.card}</span></td>
+                <td class="px-4 py-3 whitespace-nowrap fat-s2">
                     <div class="font-medium">${item.category}</div>
                     <div class="text-xs text-gray-400 uppercase">${item.name}</div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-center">${item.curr}/${item.total}</td>`;
+                <td class="px-4 py-3 whitespace-nowrap text-center fat-s3">${item.curr}/${item.total}</td>`;
             item.projections.forEach((val, i) => {
                 const hl = i === selectedMonthIndex ? 'bg-indigo-50' : '';
                 row += `<td class="px-4 py-3 whitespace-nowrap text-right ${val > 0 ? 'font-medium' : 'text-gray-300'} ${hl}">${val > 0 ? formatCurrency(val) : '-'}</td>`;
@@ -2429,7 +2440,7 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
             tbodyHTML += row;
         });
 
-        let totalRow = `<tr class="bg-indigo-50 font-bold text-gray-900 sticky bottom-0 border-t-2 border-indigo-200"><td class="px-4 py-3" colspan="3">TOTAL CARTÕES MENSAL</td>`;
+        let totalRow = `<tr class="bg-indigo-50 font-bold text-gray-900 sticky bottom-0 border-t-2 border-indigo-200"><td class="px-4 py-3 fat-s1">TOTAL CARTÕES MENSAL</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
         monthlyFaturasTotals.forEach((val, i) => {
             const hl = i === selectedMonthIndex ? 'bg-indigo-200 text-indigo-900' : '';
             totalRow += `<td class="px-4 py-3 whitespace-nowrap text-right ${hl}">${formatCurrency(val)}</td>`;
@@ -2438,7 +2449,7 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
         tbodyHTML += totalRow;
     }
 
-    let megaRow = `<tr class="bg-gray-800 font-bold text-white sticky bottom-0"><td class="px-4 py-3" colspan="3">SAÍDA TOTAL (CARTÃO + FIXAS + EXTRAS)</td>`;
+    let megaRow = `<tr class="bg-gray-800 font-bold text-white sticky bottom-0"><td class="px-4 py-3 fat-s1">SAÍDA TOTAL (CARTÃO + FIXAS + EXTRAS)</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
     monthlyFaturasTotals.forEach((val, i) => {
         const hl = i === selectedMonthIndex ? 'bg-gray-700' : '';
         megaRow += `<td class="px-4 py-3 whitespace-nowrap text-right ${hl}">${formatCurrency(val + TOTAL_FIXED + monthlyDividasTotals[i])}</td>`;
@@ -2446,6 +2457,20 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
     megaRow += `<td></td></tr>`;
     tbodyHTML += megaRow;
     tbody.innerHTML = tbodyHTML;
+
+    // Scroll table so the column 2 months before current is the first visible column
+    requestAnimationFrame(() => {
+        const container = table.closest('.table-container');
+        const ths = thead.querySelectorAll('th');
+        const targetTh = ths[3 + (HISTORY_COUNT - 2)]; // 3 sticky cols + offset
+        const lastStickyTh = ths[2];
+        if (container && targetTh && lastStickyTh) {
+            const cRect = container.getBoundingClientRect();
+            const stickyWidth = lastStickyTh.getBoundingClientRect().right - cRect.left;
+            const targetLeft  = targetTh.getBoundingClientRect().left  - cRect.left;
+            container.scrollLeft += targetLeft - stickyWidth;
+        }
+    });
 }
 
 // ============================================================
