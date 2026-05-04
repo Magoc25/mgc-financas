@@ -596,7 +596,7 @@ on conflict (id) do nothing;</div>
     </div>
     <div class="flex flex-col md:flex-row gap-4 w-full xl:w-auto mt-4 xl:mt-0">
         <div class="flex-1 md:w-40">
-            <label class="block text-sm font-medium text-gray-700">Mês da Fatura:</label>
+            <label class="block text-sm font-medium text-gray-700">Mês:</label>
             <select id="filterMonth" class="mt-1 block w-full pl-3 pr-8 py-2 text-sm border-gray-300 rounded-md border"></select>
         </div>
         <div class="flex-1 md:w-40 xl:w-48">
@@ -991,21 +991,22 @@ const APP_VERSION    = '4.0.0'; // atualizado por update-version.sh
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 const MONTH_COUNT    = 24;
+const HISTORY_COUNT  = 12; // meses passados visíveis no filtro
 const STORAGE_KEY    = 'financeAppV6_Personalized';
 const DARK_KEY       = 'finDark';
 
-function gerarMeses(n) {
+function gerarMeses(futuro, passado = 0) {
     const abrev = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
     const result = [], now = new Date();
-    for (let i = 0; i < n; i++) {
+    for (let i = -passado; i < futuro; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
         result.push(`${abrev[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`);
     }
     return result;
 }
 
-const monthNames    = gerarMeses(MONTH_COUNT);
-const visibleMonths = monthNames.length;
+const monthNames    = gerarMeses(MONTH_COUNT, HISTORY_COUNT);
+const visibleMonths = monthNames.length; // HISTORY_COUNT + MONTH_COUNT
 
 const PREDEFINED_CATEGORIES = ["Alimentação Fora de Casa","Combustível","Educação","Eletromóveis","Entretenimento","Farmácia","Supermercado","Vestuário","Viagem","Outros"];
 const PREDEFINED_CARDS      = ["Mercado Pago","Credicard"];
@@ -1099,12 +1100,9 @@ function rebuildMonthSelects() {
         newMonthSel.insertAdjacentHTML('beforeend',    `<option value="${m}">${m}</option>`);
         editMesSel.insertAdjacentHTML('beforeend',     `<option value="${m}">${m}</option>`);
     });
-    // Default to next month
-    const abrev = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-    const now   = new Date();
-    const next  = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const target = `${abrev[next.getMonth()]}/${String(next.getFullYear()).slice(2)}`;
-    if (monthNames.includes(target)) filterMonthSel.value = target;
+    // Filtro: padrão = próximo mês; formulário: padrão = mês atual
+    filterMonthSel.value = monthNames[HISTORY_COUNT + 1] || monthNames[HISTORY_COUNT];
+    newMonthSel.value    = monthNames[HISTORY_COUNT];
 }
 
 // ============================================================
@@ -1181,7 +1179,7 @@ function editarItem(tipo, index) {
     document.getElementById('editCategoriaRow').style.display = showCat      ? '' : 'none';
 
     if (showParcelas) { document.getElementById('editCurr').value = data.curr; document.getElementById('editTotal').value = data.total; }
-    if (showMes) document.getElementById('editMes').value = data.mesInicio || monthNames[0];
+    if (showMes) document.getElementById('editMes').value = data.mesInicio || monthNames[HISTORY_COUNT];
     if (showCat) document.getElementById('editCategoria').value = data.category || 'Outros';
 
     document.getElementById('editModal').classList.remove('hidden');
@@ -1738,7 +1736,7 @@ function togglePagPanel() {
 
 function _getMesPag() {
     const sel = document.getElementById('filterMonth').value;
-    return sel === 'Todos' ? monthNames[0] : sel;
+    return sel === 'Todos' ? monthNames[HISTORY_COUNT] : sel;
 }
 
 function _getPag(mes) {
@@ -1866,24 +1864,25 @@ function processarDadosERenderizar() {
         const [m, y] = str.split('/');
         return (2000 + parseInt(y)) * 12 + ab.indexOf(m);
     }
-    const _nowAbs = _absMonth(monthNames[0]);
+    // _nowAbs sempre usa a data real, independente de monthNames[0]
+    const _nowReal = new Date();
+    const _nowAbs  = _nowReal.getFullYear() * 12 + _nowReal.getMonth();
 
     processedData = appData.faturas.map((item, idx) => {
         let projections = [], totalItemDebt = 0;
-        const startIndex = item.mesInicio ? monthNames.indexOf(item.mesInicio) : 0;
+        const startIndex = item.mesInicio ? monthNames.indexOf(item.mesInicio) : HISTORY_COUNT;
         let si, remaining;
 
         if (startIndex >= 0) {
-            // mesInicio está no presente ou futuro — comportamento normal
             si = startIndex;
             remaining = (item.total - item.curr) + 1;
         } else {
-            // mesInicio está no passado: descontar meses já transcorridos
+            // mesInicio anterior à janela de histórico: descontar meses transcorridos
             const itemAbs   = item.mesInicio ? _absMonth(item.mesInicio) : _nowAbs;
             const elapsed   = _nowAbs - itemAbs;
             const totalInst = (item.total - item.curr) + 1;
             remaining = Math.max(0, totalInst - elapsed);
-            si = 0;
+            si = HISTORY_COUNT;
         }
 
         for (let i = 0; i < visibleMonths; i++) {
@@ -1957,7 +1956,7 @@ function renderDashboard() {
     const selectedStore = document.getElementById('filterStore').value;
     const selectedMonth = document.getElementById('filterMonth').value;
     const selectedMonthIndex     = selectedMonth === 'Todos' ? -1 : monthNames.indexOf(selectedMonth);
-    const actualMonthIndexForCalc = selectedMonthIndex === -1 ? 0 : selectedMonthIndex;
+    const actualMonthIndexForCalc = selectedMonthIndex === -1 ? HISTORY_COUNT : selectedMonthIndex;
 
     const filteredData = processedData.filter(item => {
         const matchCard  = selectedCard  === 'Todos' || item.card === selectedCard;
@@ -2362,7 +2361,7 @@ function renderDividasTable(selectedMonthIndex) {
         const si = item.mesInicio ? monthNames.indexOf(item.mesInicio) : 0;
         if (selectedMonthIndex === -1 || si === selectedMonthIndex) {
             html += `<tr class="hover:bg-red-50 text-gray-700">
-                <td class="px-2 py-2 whitespace-nowrap">${item.name} <span class="text-xs text-red-400">(${item.mesInicio || monthNames[0]})</span></td>
+                <td class="px-2 py-2 whitespace-nowrap">${item.name} <span class="text-xs text-red-400">(${item.mesInicio || monthNames[HISTORY_COUNT]})</span></td>
                 <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-red-600">${formatCurrency(item.amount)}</td>
                 <td class="px-1 py-2 text-center w-16">
                     <button onclick="editarItem('divida',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
@@ -2712,7 +2711,10 @@ function rebuildFormSelectsSheet() {
     ['newType','newMonth','newCategory'].forEach(id => {
         const os = orig.querySelector('#' + id);
         const ss = sheet.querySelector('#' + id);
-        if (os && ss) ss.innerHTML = os.innerHTML;
+        if (os && ss) {
+            ss.innerHTML = os.innerHTML;
+            if (id === 'newMonth') ss.value = monthNames[HISTORY_COUNT];
+        }
     });
 }
 
