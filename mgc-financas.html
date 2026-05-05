@@ -538,9 +538,9 @@ on conflict (id) do nothing;</div>
         <div id="histContent">
             <table class="hist-table w-full">
                 <thead><tr>
-                    <th>Data/Hora</th><th>Ação</th><th>Tipo</th><th>Item</th>
+                    <th>Data/Hora</th><th>Ação</th><th>Tipo</th><th>Item</th><th>Valor</th>
                 </tr></thead>
-                <tbody id="histBody"><tr><td colspan="4" class="text-center text-gray-400 py-6 italic text-xs">Nenhuma alteração registrada.</td></tr></tbody>
+                <tbody id="histBody"><tr><td colspan="5" class="text-center text-gray-400 py-6 italic text-xs">Nenhuma alteração registrada.</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -1005,7 +1005,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // ============================================================
 // CONFIG & HELPERS
 // ============================================================
-const APP_VERSION    = '4.2.0'; // atualizado por update-version.sh
+const APP_VERSION    = '4.3.0'; // atualizado por update-version.sh
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 const MONTH_COUNT    = 24;
@@ -1119,7 +1119,7 @@ function rebuildMonthSelects() {
         editMesSel.insertAdjacentHTML('beforeend',     `<option value="${m}">${m}</option>`);
     });
     // Filtro: padrão = próximo mês; formulário: padrão = mês atual
-    filterMonthSel.value = monthNames[HISTORY_COUNT + 1] || monthNames[HISTORY_COUNT];
+    filterMonthSel.value = monthNames[HISTORY_COUNT];
     newMonthSel.value    = monthNames[HISTORY_COUNT];
 }
 
@@ -1227,7 +1227,7 @@ document.getElementById('editSaveBtn').onclick = () => {
         appData.faturas[index] = { ...appData.faturas[index], name: nome, amount: valor, curr, total,
             category: document.getElementById('editCategoria').value, mesInicio: document.getElementById('editMes').value };
     }
-    logHistorico('edit', tipo, nome);
+    logHistorico('edit', tipo, nome, valor);
     salvarDados();
     document.getElementById('editModal').classList.add('hidden');
     toast('Item atualizado!', 'success');
@@ -1579,7 +1579,7 @@ function removerItem(tipo, index) {
     else if (tipo === 'fatura') removed = appData.faturas.splice(index, 1)[0];
     if (!removed) return;
 
-    logHistorico('remove', tipo, removed.name);
+    logHistorico('remove', tipo, removed.name, removed.amount);
     _undoBuffer = { tipo, index, item: removed };
     salvarDados(); processarDadosERenderizar();
 
@@ -1626,7 +1626,7 @@ function duplicarItem(tipo, index) {
     else if (tipo === 'divida') appData.dividas.push(copia);
     else if (tipo === 'renda')  appData.rendas.push(copia);
     else if (tipo === 'fatura') appData.faturas.push(copia);
-    logHistorico('dup', tipo, copia.name);
+    logHistorico('dup', tipo, copia.name, copia.amount);
     salvarDados(); processarDadosERenderizar();
     toast(`"${copia.name}" duplicado!`, 'info');
 }
@@ -1675,7 +1675,7 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
         appData.faturas.push({ card: tipo, name: nome, category: categoria, amount: valor, curr, total, mesInicio: mes });
     }
 
-    logHistorico('add', tipo === 'Fixa' ? 'fixa' : tipo === 'Renda' ? 'renda' : tipo === 'Divida' ? 'divida' : 'fatura', nome);
+    logHistorico('add', tipo === 'Fixa' ? 'fixa' : tipo === 'Renda' ? 'renda' : tipo === 'Divida' ? 'divida' : 'fatura', nome, valor);
     salvarDados();
     this.reset();
     document.getElementById('newCurr').value  = 1;
@@ -2571,10 +2571,10 @@ const TIPO_LABEL = { fatura:'Cartão', fixa:'Fixa', divida:'Dívida', renda:'Ren
 const ACAO_CLASS  = { add:'hist-add', edit:'hist-edit', remove:'hist-remove', dup:'hist-dup' };
 const ACAO_LABEL  = { add:'Adicionado', edit:'Editado', remove:'Removido', dup:'Duplicado' };
 
-function logHistorico(acao, tipo, nome) {
+function logHistorico(acao, tipo, nome, valor = null) {
     if (!appData.historico) appData.historico = [];
     const ts = new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
-    appData.historico.unshift({ ts, acao, tipo, nome });
+    appData.historico.unshift({ ts, acao, tipo, nome, valor });
     if (appData.historico.length > HIST_MAX) appData.historico.length = HIST_MAX;
     salvarDados();
 }
@@ -2590,6 +2590,7 @@ function abrirHistorico() {
             <td><span class="hist-badge ${ACAO_CLASS[h.acao] || ''}">${ACAO_LABEL[h.acao] || h.acao}</span></td>
             <td class="text-gray-600 capitalize">${TIPO_LABEL[h.tipo] || h.tipo}</td>
             <td class="text-gray-700 font-medium">${h.nome}</td>
+            <td class="text-gray-700 whitespace-nowrap text-right">${h.valor != null ? formatCurrency(h.valor) : '-'}</td>
         </tr>`).join('');
     }
     document.getElementById('histModal').classList.remove('hidden');

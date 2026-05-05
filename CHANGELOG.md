@@ -5,6 +5,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.3.0] — Maio 2026
+
+### 🔧 Melhorado
+- **Filtro de mês** — padrão alterado para o mês atual (antes abria no próximo mês, causando confusão com o campo Mês do formulário)
+- **Histórico de Alterações** — coluna "Valor" adicionada; todos os eventos (adicionar, editar, remover, duplicar) registram o valor da compra
+
+---
+
 ## [4.2.0] — Maio 2026
 
 ### 🔧 Melhorado
