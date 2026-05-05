@@ -5,6 +5,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.2.0] — Maio 2026
+
+### 🔧 Melhorado
+- **Controle de Pagamentos** — toggle "Mês atual / Mês anterior" permite marcar despesas do mês anterior como pagas sem sair da view do mês corrente
+- **Detalhamento Faturas** — linhas "TOTAL CARTÕES MENSAL" e "SAÍDA TOTAL" ficam fixas na base da tabela ao rolar verticalmente (movidas para `<tfoot>` sticky)
+
+---
+
 ## [4.1.0] — Maio 2026
 
 ### 🔧 Melhorado

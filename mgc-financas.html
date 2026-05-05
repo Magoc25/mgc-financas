@@ -232,6 +232,9 @@
         .bg-gray-800 > .fat-s1,  .bg-gray-800 > .fat-s2,  .bg-gray-800 > .fat-s3  { background: #1f2937; }
         html.dark .fat-s1, html.dark .fat-s2, html.dark .fat-s3 { background: #0f172a; }
         html.dark thead .fat-s1, html.dark thead .fat-s2, html.dark thead .fat-s3 { background: #1e293b; }
+        /* sticky footer rows — fatura table */
+        #dataTable tfoot { position: sticky; bottom: 0; z-index: 4; }
+        html.dark #dataTable tfoot .fat-s1, html.dark #dataTable tfoot .fat-s2, html.dark #dataTable tfoot .fat-s3 { background: #1f2937; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -762,6 +765,10 @@ on conflict (id) do nothing;</div>
         </div>
     </button>
     <div id="pagamentosBody" class="px-5 pb-5">
+        <div class="flex gap-2 mb-4 pt-1">
+            <button id="pagTabAtual" onclick="setPagOffset(0)" class="px-3 py-1 text-xs rounded-full font-medium transition-colors bg-indigo-600 text-white">Mês atual</button>
+            <button id="pagTabAnterior" onclick="setPagOffset(-1)" class="px-3 py-1 text-xs rounded-full font-medium transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200">Mês anterior</button>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
                 <h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Despesas Fixas</h3>
@@ -899,6 +906,7 @@ on conflict (id) do nothing;</div>
             <table class="min-w-full divide-y divide-gray-200 text-sm" id="dataTable">
                 <thead class="bg-gray-50"></thead>
                 <tbody class="bg-white divide-y divide-gray-200" id="tableBody"></tbody>
+                <tfoot id="tableFoot"></tfoot>
             </table>
         </div>
     </div>
@@ -997,7 +1005,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // ============================================================
 // CONFIG & HELPERS
 // ============================================================
-const APP_VERSION    = '4.1.0'; // atualizado por update-version.sh
+const APP_VERSION    = '4.2.0'; // atualizado por update-version.sh
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 const MONTH_COUNT    = 24;
@@ -1737,6 +1745,7 @@ function filtrarPorBusca(q) {
 // PAGAMENTOS
 // ============================================================
 let _pagPanelOpen = true;
+let _pagOffset    = 0; // 0 = mês do filtro, -1 = mês anterior
 
 function togglePagPanel() {
     _pagPanelOpen = !_pagPanelOpen;
@@ -1746,8 +1755,19 @@ function togglePagPanel() {
 }
 
 function _getMesPag() {
-    const sel = document.getElementById('filterMonth').value;
-    return sel === 'Todos' ? monthNames[HISTORY_COUNT] : sel;
+    const sel  = document.getElementById('filterMonth').value;
+    const base = sel === 'Todos' ? monthNames[HISTORY_COUNT] : sel;
+    if (_pagOffset === 0) return base;
+    const idx = monthNames.indexOf(base);
+    return idx >= 1 ? monthNames[idx - 1] : base;
+}
+
+function setPagOffset(offset) {
+    _pagOffset = offset;
+    const base = 'px-3 py-1 text-xs rounded-full font-medium transition-colors';
+    document.getElementById('pagTabAtual').className    = base + (offset === 0  ? ' bg-indigo-600 text-white' : ' bg-gray-100 text-gray-600 hover:bg-gray-200');
+    document.getElementById('pagTabAnterior').className = base + (offset === -1 ? ' bg-indigo-600 text-white' : ' bg-gray-100 text-gray-600 hover:bg-gray-200');
+    renderPagamentos();
 }
 
 function _getPag(mes) {
@@ -2397,6 +2417,7 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
     const table = document.getElementById('dataTable');
     const thead = table.querySelector('thead');
     const tbody = table.querySelector('tbody');
+    const tfoot = table.querySelector('tfoot');
 
     const thSortBase = 'px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100';
     const mkFTh = (col, label, align = 'left', extraClass = '') => {
@@ -2416,6 +2437,7 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
     thead.innerHTML = theadHTML;
 
     let tbodyHTML = '';
+    let tfootHTML = '';
     if (filteredData.length === 0) {
         tbodyHTML = `<tr><td colspan="${4 + visibleMonths}" class="px-4 py-8 text-center text-gray-400 italic">Nenhum lançamento de cartão encontrado.</td></tr>`;
     } else {
@@ -2440,23 +2462,24 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
             tbodyHTML += row;
         });
 
-        let totalRow = `<tr class="bg-indigo-50 font-bold text-gray-900 sticky bottom-0 border-t-2 border-indigo-200"><td class="px-4 py-3 fat-s1">TOTAL CARTÕES MENSAL</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
+        let totalRow = `<tr class="bg-indigo-50 font-bold text-gray-900 border-t-2 border-indigo-200"><td class="px-4 py-3 fat-s1">TOTAL CARTÕES MENSAL</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
         monthlyFaturasTotals.forEach((val, i) => {
             const hl = i === selectedMonthIndex ? 'bg-indigo-200 text-indigo-900' : '';
             totalRow += `<td class="px-4 py-3 whitespace-nowrap text-right ${hl}">${formatCurrency(val)}</td>`;
         });
         totalRow += `<td></td></tr>`;
-        tbodyHTML += totalRow;
+        tfootHTML += totalRow;
     }
 
-    let megaRow = `<tr class="bg-gray-800 font-bold text-white sticky bottom-0"><td class="px-4 py-3 fat-s1">SAÍDA TOTAL (CARTÃO + FIXAS + EXTRAS)</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
+    let megaRow = `<tr class="bg-gray-800 font-bold text-white"><td class="px-4 py-3 fat-s1">SAÍDA TOTAL (CARTÃO + FIXAS + EXTRAS)</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
     monthlyFaturasTotals.forEach((val, i) => {
         const hl = i === selectedMonthIndex ? 'bg-gray-700' : '';
         megaRow += `<td class="px-4 py-3 whitespace-nowrap text-right ${hl}">${formatCurrency(val + TOTAL_FIXED + monthlyDividasTotals[i])}</td>`;
     });
     megaRow += `<td></td></tr>`;
-    tbodyHTML += megaRow;
+    tfootHTML += megaRow;
     tbody.innerHTML = tbodyHTML;
+    if (tfoot) tfoot.innerHTML = tfootHTML;
 
     // Scroll table so the column 2 months before current is the first visible column
     requestAnimationFrame(() => {
