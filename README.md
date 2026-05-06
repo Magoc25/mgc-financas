@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas o MGC Finanças é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.0.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.3.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-uso%20pessoal%20livre-green)](#licença)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#instalar-como-app-no-celular)
 
@@ -207,6 +207,8 @@ Após configurar o GitHub Pages e acessar a URL pelo celular:
 ## 🔧 Guias de Configuração
 
 ### Configurar Supabase
+
+> 🎬 **[Abrir Guia Animado de Configuração](https://magoc25.github.io/mgc-financas/guia-supabase.html)** — passo a passo visual com animação (abre em nova aba)
 
 #### 1. Criar conta e projeto
 1. Acesse [supabase.com](https://supabase.com) → **Start your project**
