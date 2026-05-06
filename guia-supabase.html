@@ -160,6 +160,89 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (window.Babel && typeof window.Babel.transformScriptTags === 'function') {
       window.Babel.transformScriptTags();
     }
+    // ── Música ambiente ─────────────────────────────────────
+    (function startAmbiente() {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        let ctx, started = false;
+
+        const NOTES = [261.63,329.63,392.00,440.00,523.25,392.00,329.63,261.63];
+        const TEMPO = 420; // ms por nota
+        let ni = 0;
+
+        function mkReverb(c) {
+          const conv = c.createConvolver();
+          const buf  = c.createBuffer(2, c.sampleRate * 2.5, c.sampleRate);
+          for (let ch = 0; ch < 2; ch++) {
+            const d = buf.getChannelData(ch);
+            for (let i = 0; i < d.length; i++)
+              d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 1.8);
+          }
+          conv.buffer = buf;
+          return conv;
+        }
+
+        function launch() {
+          if (started) return;
+          started = true;
+          ctx = new AC();
+          const master = ctx.createGain();
+          master.gain.setValueAtTime(0, ctx.currentTime);
+          master.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 3.5);
+          const rev = mkReverb(ctx);
+          rev.connect(master);
+          master.connect(ctx.destination);
+
+          // Pad grave
+          [65.41, 98.00, 130.81].forEach((f, i) => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'sine'; o.frequency.value = f;
+            g.gain.value = [0.08, 0.05, 0.04][i];
+            o.connect(g); g.connect(rev); o.start();
+          });
+
+          // Arpejo
+          function tick() {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'triangle';
+            o.frequency.value = NOTES[ni++ % NOTES.length];
+            g.gain.setValueAtTime(0.07, ctx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + TEMPO/1000*0.85);
+            o.connect(g); g.connect(rev);
+            o.start(ctx.currentTime); o.stop(ctx.currentTime + TEMPO/1000);
+            setTimeout(tick, TEMPO);
+          }
+          setTimeout(tick, 1200);
+
+          // Esconde hint
+          const hint = document.getElementById('__musicHint');
+          if (hint) { hint.style.opacity='0'; setTimeout(()=>hint.remove(),600); }
+        }
+
+        // Hint visual
+        setTimeout(() => {
+          const h = document.createElement('div');
+          h.id = '__musicHint';
+          h.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);' +
+            'background:rgba(62,207,142,0.15);border:1px solid rgba(62,207,142,0.4);' +
+            'color:#3ECF8E;padding:8px 18px;border-radius:20px;font-size:12px;' +
+            'cursor:pointer;z-index:99999;transition:opacity .5s;backdrop-filter:blur(4px);';
+          h.textContent = '🎵 Clique para ativar música';
+          h.onclick = launch;
+          document.body && document.body.appendChild(h);
+        }, 1800);
+
+        // Tenta autoplay
+        setTimeout(() => { try { launch(); if(ctx && ctx.state==='suspended') ctx.resume(); } catch(e){} }, 600);
+
+        ['click','touchstart','keydown'].forEach(ev =>
+          document.addEventListener(ev, launch, { once: true }));
+      } catch(e) {}
+    })();
+    // ────────────────────────────────────────────────────────
   } catch (err) {
     setStatus('Error unpacking: ' + err.message);
     console.error('Bundle unpack error:', err);
