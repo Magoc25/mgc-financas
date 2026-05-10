@@ -1,0 +1,44 @@
+name: Atualizar Estatísticas de Dispositivos Ativos
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 04:00 Brasília (diário)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Consultar Supabase e gravar stats.json
+        env:
+          SB_URL: ${{ secrets.REV_SB_URL }}
+          SB_KEY: ${{ secrets.REV_SB_KEY }}
+        run: |
+          THIRTY_DAYS_AGO=$(date -d '30 days ago' +%Y-%m-%d)
+          RESPONSE=$(curl -s \
+            "${SB_URL}/rest/v1/app_pings?select=device_id&app_name=eq.mgc-financas&ping_date=gte.${THIRTY_DAYS_AGO}" \
+            -H "apikey: ${SB_KEY}" \
+            -H "Authorization: Bearer ${SB_KEY}")
+          COUNT=$(echo "$RESPONSE" | jq '[.[].device_id] | unique | length')
+          TODAY=$(date +%Y-%m-%d)
+          echo "{\"active_30d\":${COUNT},\"updated_at\":\"${TODAY}\"}" > stats.json
+          echo "Dispositivos ativos (30d): $COUNT"
+
+      - name: Commit e push
+        run: |
+          git config user.name "Magoc25"
+          git config user.email "129018821+Magoc25@users.noreply.github.com"
+          git add stats.json
+          git diff --staged --quiet || git commit -m "chore: atualiza contagem de dispositivos ativos"
+          git push

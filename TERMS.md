@@ -79,6 +79,7 @@ O MGC Finanças foi projetado com privacidade por padrão:
 - **Dados financeiros:** armazenados exclusivamente no `localStorage` do seu navegador ou no seu próprio projeto Supabase. O autor não tem acesso a esses dados.
 - **Chaves do Supabase:** inseridas pelo usuário na interface do app e salvas no `localStorage`. Nunca são enviadas ao desenvolvedor nem incluídas no código publicado.
 - **Avaliações e apoio PIX:** ao deixar uma avaliação, seu nome e comentário são armazenados no Supabase compartilhado do desenvolvedor (usado exclusivamente para exibição de reviews no app). Não há coleta de dados financeiros neste processo.
+- **Ping anônimo de dispositivos ativos:** o app envia um ping anônimo por dia ao Supabase do autor para contagem de dispositivos ativos. O ping contém apenas: nome do app, versão, data e um identificador aleatório gerado no dispositivo (sem vínculo com dados pessoais). Não é possível identificar o usuário a partir deste dado.
 - **Repositório público:** o código no GitHub não contém dados do usuário nem credenciais.
 
 ---

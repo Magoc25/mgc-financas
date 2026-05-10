@@ -3101,6 +3101,23 @@ async function submitReview() {
     } catch(e) {}
 })();
 
+// Ping anônimo de dispositivo ativo (1x por dia por dispositivo)
+(async () => {
+    if (!revClient) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const PING_KEY = 'mgc-financas_ping_date';
+    if (localStorage.getItem(PING_KEY) === today) return;
+    let deviceId = localStorage.getItem('mgc-financas_device_id');
+    if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem('mgc-financas_device_id', deviceId); }
+    try {
+        await revClient.from('app_pings').upsert(
+            { app_name: 'mgc-financas', version: LOCAL_VERSION, device_id: deviceId, ping_date: today },
+            { onConflict: 'app_name,device_id,ping_date', ignoreDuplicates: true }
+        );
+        localStorage.setItem(PING_KEY, today);
+    } catch(e) {}
+})();
+
 inicializar();
 </script>
 
