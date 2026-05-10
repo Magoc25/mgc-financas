@@ -7,8 +7,39 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas o MGC Finanças é uma iniciativa exclusivamente pessoal.
 
 [![Versão](https://img.shields.io/badge/versão-4.3.0-blue)](#changelog)
-[![Licença](https://img.shields.io/badge/licença-uso%20pessoal%20livre-green)](#licença)
+[![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#instalar-como-app-no-celular)
+[![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
+
+---
+
+## 🤔 Por que usar o MGC Finanças?
+
+Se você está avaliando este app, provavelmente já viu opções na Play Store ou App Store. Antes de decidir, considere:
+
+- **Seus dados são seus** — nenhuma empresa, servidor externo ou desenvolvedor acessa seus dados. Eles ficam no seu dispositivo ou no seu próprio banco de dados, sob seu controle total.
+- **Sem propagandas** — apps "gratuitos" nas lojas se sustentam exibindo anúncios. Este não.
+- **Sem prazo de expiração** — muitos apps oferecem período de teste e depois bloqueiam funcionalidades ou cobram assinatura. Este é gratuito para sempre, sem limitações.
+- **Funciona sem internet** — abre e funciona normalmente mesmo sem conexão. Sincroniza quando a internet voltar, se você quiser.
+- **Sem cadastro em lugar nenhum — nem para sincronizar** — muitos apps financeiros "gratuitos" exigem e-mail ou conta mesmo para o uso básico. O MGC Finanças abre direto no navegador, sem cadastro, sem login, sem verificação — e sincroniza entre dispositivos usando o seu próprio banco de dados Supabase, não o de uma empresa terceira.
+- **Feito para finanças brasileiras** — apps internacionais ignoram (ou cobram em planos premium) funcionalidades a mais. O MGC Finanças foi construído com essas categorias desde o início.
+
+O único "custo" honesto: a instalação é um pouco mais manual do que clicar em "Instalar" na loja — mas você faz uma única vez e leva menos de 5 minutos.
+
+---
+
+## 📂 O que são todos esses arquivos?
+
+Se você veio aqui só para **usar o app**, pode ignorar a grande maioria dos arquivos deste repositório — eles são documentação técnica e configuração voltadas para desenvolvedores.
+
+Para você, o que importa é simples:
+
+| Cenário | O que você precisa |
+|---|---|
+| **Usar no computador** (sem nuvem) | Baixar apenas `mgc-financas.html` e abrir no navegador |
+| **Acessar por URL em qualquer dispositivo** | Criar uma conta no GitHub, fazer upload dos arquivos deste repositório uma única vez — depois acessa de qualquer lugar pela URL, sem guardar nada no computador |
+
+👉 Vá direto para [**Como usar**](#-como-usar--3-cenários) para o passo a passo do seu cenário.
 
 ---
 
@@ -245,6 +276,24 @@ Vá em **Settings → Data API**:
 3. Clique em **Salvar e sincronizar**
 4. Os dados são enviados imediatamente e sincronizados a cada salvamento
 
+#### Bloco extra — Evitar suspensão por inatividade (recomendado)
+
+O Supabase pode suspender projetos gratuitos sem atividade por 7 dias consecutivos. Para evitar isso:
+
+1. Vá em **Database → Extensions** → busque `pg_cron` → ative o toggle
+2. No **SQL Editor**, rode uma vez:
+
+```sql
+SELECT cron.schedule(
+  'mgc-financas-keep-alive',
+  '0 8 * * 1',
+  $$SELECT COUNT(*) FROM public.finance_data$$
+);
+```
+
+> Agenda uma consulta toda segunda-feira às 5h Brasília — funciona de forma autônoma a partir daí.
+> Para confirmar que foi criado: `SELECT * FROM cron.job;`
+
 ---
 
 ### Configurar GitHub Pages
@@ -330,9 +379,40 @@ Para restaurar: **📂 Importar Backup → selecione o arquivo JSON**
 
 ---
 
-## 📄 Licença
+## ☕ Apoiar o Projeto
 
-Este software é de uso **pessoal e educacional livre**. Uso comercial requer autorização do autor.
+O projeto é gratuito e possui **código-fonte disponível**. Se foi útil, considere apoiar:
+
+Clique em **☕ Apoiar** no rodapé do app para contribuir via PIX.
+
+**Chave PIX:** `4c6086a2-4bb8-474b-a4cf-ced8c8d82189` · MGC Dev
+
+### ⭐ Avaliações compartilhadas
+
+Após apoiar, deixe uma avaliação com estrelas e comentário. As avaliações são **compartilhadas entre todos os usuários** do app.
+
+### 👑 Badges de apoiador
+
+| Badge | Meses de apoio |
+|---|---|
+| ☕ Apoiador | 1 mês |
+| ⭐ Fã | 2–3 meses |
+| 🔥 Dedicado | 4–6 meses |
+| 👑 Patrono | 7+ meses |
+
+---
+
+## 📄 Licença e termos de uso
+
+Este projeto possui **código-fonte disponível** para estudo, uso pessoal, familiar, educacional, acadêmico e avaliação técnica.
+
+**Não é uma licença open source permissiva tradicional.** O uso comercial, a redistribuição comercial, o white-label, a revenda e a exploração econômica de versões derivadas dependem de autorização prévia e por escrito do autor.
+
+Consulte os arquivos:
+
+- [LICENSE.md](./LICENSE.md)
+- [TERMS.md](./TERMS.md)
+- [CHANGELOG.md](./CHANGELOG.md)
 
 ---
 
