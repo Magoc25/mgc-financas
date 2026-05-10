@@ -1095,6 +1095,34 @@ const APP_VERSION    = '4.3.0'; // atualizado por update-version.sh
 const LOCAL_VERSION  = '4.3.0'; // bumpar a cada release junto com APP_VERSION
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
+
+// Smart defaults — pré-seleciona Tipo e Categoria mais usados
+const FORM_FREQ_KEY = 'finFormFreq';
+function getFormFreq() {
+    try { return JSON.parse(localStorage.getItem(FORM_FREQ_KEY) || '{"tipo":{},"cat":{}}'); }
+    catch(e) { return { tipo: {}, cat: {} }; }
+}
+function trackFormUsage(tipo, cat) {
+    const freq = getFormFreq();
+    freq.tipo[tipo] = (freq.tipo[tipo] || 0) + 1;
+    if (cat) freq.cat[cat] = (freq.cat[cat] || 0) + 1;
+    try { localStorage.setItem(FORM_FREQ_KEY, JSON.stringify(freq)); } catch(e) {}
+}
+function _mostUsed(obj) {
+    const entries = Object.entries(obj);
+    if (!entries.length) return null;
+    return entries.reduce((a, b) => b[1] > a[1] ? b : a)[0];
+}
+function applyFormDefaults() {
+    const freq    = getFormFreq();
+    const typeEl  = document.getElementById('newType');
+    const catEl   = document.getElementById('newCategory');
+    const bestType = _mostUsed(freq.tipo);
+    const bestCat  = _mostUsed(freq.cat);
+    if (bestType && [...typeEl.options].some(o => o.value === bestType)) typeEl.value = bestType;
+    toggleFormFields();
+    if (bestCat && [...catEl.options].some(o => o.value === bestCat)) catEl.value = bestCat;
+}
 const MONTH_COUNT    = 24;
 const HISTORY_COUNT  = 12; // meses passados visíveis no filtro
 const STORAGE_KEY    = 'financeAppV6_Personalized';
@@ -1186,8 +1214,11 @@ function rebuildFormSelects() {
     fc.innerHTML = '<option value="Todos">Todos os Cartões</option>' + cartoes.map(c => `<option value="${c}">${c}</option>`).join('');
     if ([...fc.options].some(o => o.value === prevCard)) fc.value = prevCard;
 
-    // category selects
-    document.getElementById('newCategory').innerHTML  = catOpts;
+    // category selects — preserva seleção anterior
+    const catEl   = document.getElementById('newCategory');
+    const prevCat = catEl.value;
+    catEl.innerHTML = catOpts;
+    if (prevCat && [...catEl.options].some(o => o.value === prevCat)) catEl.value = prevCat;
     document.getElementById('editCategoria').innerHTML = catOpts;
 
     toggleFormFields();
@@ -1550,6 +1581,7 @@ async function inicializar() {
     document.getElementById('appVersionFooter').textContent = 'v' + APP_VERSION;
     rebuildMonthSelects();
     rebuildFormSelects();
+    applyFormDefaults();
     atualizarBotoesPIN();
     if (_pinAtivo()) bloquearDashboard();
     if (SUPA_URL && SUPA_KEY) {
@@ -1763,12 +1795,13 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
     }
 
     logHistorico('add', tipo === 'Fixa' ? 'fixa' : tipo === 'Renda' ? 'renda' : tipo === 'Divida' ? 'divida' : 'fatura', nome, valor);
+    trackFormUsage(tipo, isCard ? categoria : null);
     salvarDados();
     this.reset();
     document.getElementById('newCurr').value  = 1;
     document.getElementById('newTotal').value = 1;
     document.getElementById('newMonth').value = monthNames[HISTORY_COUNT];
-    toggleFormFields();
+    applyFormDefaults();
     processarDadosERenderizar();
     toast('Lançamento adicionado!', 'success');
 });
