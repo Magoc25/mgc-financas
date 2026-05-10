@@ -1,0 +1,24 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: '0 8 * * *'    # 05:00 Brasília
+    - cron: '0 20 * * *'   # 17:00 Brasília
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase reviews
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.REV_SB_URL }}/rest/v1/app_reviews?select=id&limit=1" \
+            -H "apikey: ${{ secrets.REV_SB_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.REV_SB_KEY }}")
+          echo "Status HTTP: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Aviso: resposta inesperada ($STATUS)"
+            exit 1
+          fi
+          echo "Supabase reviews ativo."
