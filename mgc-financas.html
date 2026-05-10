@@ -1,4 +1,10 @@
 <!DOCTYPE html>
+<!--
+  MGC Finanças
+  © 2026 MGC Dev — Marlon Gomes da Costa
+  Projeto pessoal. Proibido uso comercial sem autorização.
+  https://github.com/Magoc25/mgc-financas
+-->
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -6,12 +12,13 @@
     <title>MGC Finanças</title>
     <meta name="theme-color" content="#1e3a8a">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="MGC Finanças">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="description" content="Planejamento financeiro pessoal — MGC Finanças">
-    <link id="appleIcon" rel="apple-touch-icon">
-    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+    <link rel="manifest" href="./manifest.json">
     <script>tailwind.config = { darkMode: 'class' }</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -590,7 +597,7 @@ on conflict (id) do nothing;</div>
         <div class="flex items-center gap-2 mt-2">
             <span id="headerSupaBadge" class="supa-badge disconnected"><span class="supa-dot"></span><span id="headerSupaText">Offline</span></span>
         </div>
-        <p class="text-base text-gray-500 mt-2">Despesas Fixas, Cartões e Cheque Especial · Histórico mês a mês</p>
+        <p class="text-base text-gray-500 mt-2">Despesas Fixas, Cartões e Cheque Especial · Histórico mês a mês<span id="appVersion" class="hidden md:inline"> · © MGC · v4.3.0</span></p>
         <div id="headerExportRow" class="mt-4 flex flex-wrap gap-3">
             <button onclick="exportarDados()" class="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition flex items-center gap-2 shadow-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -1005,6 +1012,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // ============================================================
 // CONFIG & HELPERS
 // ============================================================
+const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
 const APP_VERSION    = '4.3.0'; // atualizado por update-version.sh
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
@@ -2780,6 +2788,26 @@ function fecharMaisSheet() { document.getElementById('maisSheet').classList.remo
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { fecharFormSheet(); fecharMaisSheet(); }
 });
+
+// Versão dinâmica via CHANGELOG.md — atualiza #appVersion no header desktop
+(async () => {
+    const el = document.getElementById('appVersion');
+    if (!el) return;
+    const CACHE_KEY = 'mgc-financas_app_version';
+    const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 horas
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < CACHE_TTL) { el.textContent = '© MGC · ' + cached.v; return; }
+    try {
+        const res = await fetch('./CHANGELOG.md?_=' + Date.now(), { cache: 'no-cache' });
+        if (!res.ok) return;
+        const text = await res.text();
+        const match = text.match(/##\s+\[(\d+\.\d+\.\d+)\]/);
+        if (!match) return;
+        const v = 'v' + match[1];
+        el.textContent = '© MGC · ' + v;
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ v, ts: Date.now() }));
+    } catch(e) { /* offline — mantém valor do HTML */ }
+})();
 
 inicializar();
 </script>
