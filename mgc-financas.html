@@ -22,6 +22,7 @@
     <script>tailwind.config = { darkMode: 'class' }</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         html.dark body { background-color: #0f172a !important; color: #f1f5f9 !important; }
         html.dark .bg-white { background-color: #1e293b !important; }
@@ -334,6 +335,13 @@
         .sort-th:hover { color: #6366f1 !important; }
         .sort-icon { font-size: 10px; opacity: 0.5; margin-left: 2px; }
         .sort-icon.active { opacity: 1; color: #6366f1; }
+
+        /* Apoiar & Reviews */
+        .app-footer { display:flex; align-items:center; justify-content:center; gap:0.5rem; padding:0.75rem 0 0.5rem; flex-wrap:wrap; }
+        .footer-btn { font-size:11px; padding:3px 10px; border-radius:12px; border:1px solid rgba(148,163,184,0.3); background:transparent; color:#9ca3af; cursor:pointer; transition:opacity 0.15s; }
+        .footer-btn:hover { opacity:0.75; }
+        .star-btn { font-size:1.8rem; cursor:pointer; color:#9ca3af; transition:color 0.1s; }
+        html.dark .modal-box textarea { background-color:#0f172a !important; color:#f1f5f9 !important; border-color:#475569 !important; }
     </style>
 </head>
 <body class="p-4 md:p-6 font-sans text-gray-800">
@@ -799,6 +807,12 @@ on conflict (id) do nothing;</div>
     </div>
 </div>
 
+<!-- Apoiar & Avaliações -->
+<div class="app-footer">
+    <button class="footer-btn" onclick="openPixModal()">☕ Apoiar</button>
+    <button class="footer-btn" onclick="openReviewsModal('list')">⭐ Avaliações</button>
+</div>
+
 </div><!-- /secInicio -->
 
 <!-- ── SECTION: GRÁFICOS ───────────────────────────────── -->
@@ -923,6 +937,72 @@ on conflict (id) do nothing;</div>
 
 <div class="mt-10 mb-2 text-center text-sm text-gray-400 font-medium">
     &copy; <script>document.write(new Date().getFullYear())</script> MGC &middot; <span id="appVersionFooter"></span>
+</div>
+
+<!-- PIX MODAL -->
+<div id="pixModal" class="modal-overlay hidden">
+    <div class="modal-box">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-semibold">☕ Apoiar o Projeto</h3>
+            <button onclick="closePixModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">&times;</button>
+        </div>
+        <p class="text-sm text-gray-500 mb-4">O app é gratuito. Se foi útil, considere apoiar via PIX.</p>
+        <div id="pixQrContainer" class="text-center mb-3 flex items-center justify-center" style="min-height:210px"></div>
+        <div class="text-center mb-4">
+            <button type="button" id="pixCopyBtn" onclick="copyPixCode()" class="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition">Copiar código PIX</button>
+        </div>
+        <hr class="border-gray-200 mb-4">
+        <button type="button" onclick="closePixModal();openReviewsModal('form')" class="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">✅ Já fiz o PIX — quero avaliar</button>
+    </div>
+</div>
+
+<!-- REVIEWS MODAL -->
+<div id="reviewsModal" class="modal-overlay hidden">
+    <div class="modal-box">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-semibold">⭐ Avaliações</h3>
+            <button onclick="closeReviewsModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">&times;</button>
+        </div>
+        <!-- Modo lista -->
+        <div id="reviewListMode">
+            <div id="reviewsList" class="overflow-y-auto mb-3" style="max-height:260px"></div>
+            <hr class="border-gray-200 my-3">
+            <button type="button" onclick="closeReviewsModal();openPixModal()" class="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">☕ Apoiar via PIX para avaliar</button>
+        </div>
+        <!-- Modo formulário -->
+        <div id="reviewFormMode" class="hidden">
+            <p class="text-sm text-gray-500 mb-3">Obrigado pelo apoio! Deixe sua avaliação.</p>
+            <div class="text-center mb-2">
+                <span class="star-btn" onclick="setReviewStar(1)">★</span>
+                <span class="star-btn" onclick="setReviewStar(2)">★</span>
+                <span class="star-btn" onclick="setReviewStar(3)">★</span>
+                <span class="star-btn" onclick="setReviewStar(4)">★</span>
+                <span class="star-btn" onclick="setReviewStar(5)">★</span>
+            </div>
+            <input type="hidden" id="reviewStarInput" value="0">
+            <div class="space-y-2 mb-3">
+                <div>
+                    <label class="text-sm text-gray-600 block mb-1">Seu nome *</label>
+                    <input id="reviewNameInput" type="text" maxlength="40" placeholder="Ex: Maria" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="text-sm text-gray-600 block mb-1">Comentário (opcional)</label>
+                    <textarea id="reviewCommentInput" rows="2" maxlength="200" placeholder="O que você achou do app?" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"></textarea>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" id="reviewDonatedCheck" checked> Já apoiei via PIX ☕
+                </label>
+            </div>
+            <button type="button" onclick="submitReview()" class="w-full py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">Enviar avaliação</button>
+        </div>
+        <!-- Agradecimento -->
+        <div id="reviewThankYou" class="hidden text-center py-4">
+            <p class="text-3xl mb-2">🎉</p>
+            <p class="font-semibold mb-1">Obrigado pela avaliação!</p>
+            <p id="reviewThankMsg" class="text-sm text-gray-500 mb-4">Sua opinião ajuda outros usuários a conhecer o app.</p>
+            <button type="button" onclick="openReviewsModal('list')" class="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition">Ver todas as avaliações</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -2788,6 +2868,181 @@ function fecharMaisSheet() { document.getElementById('maisSheet').classList.remo
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { fecharFormSheet(); fecharMaisSheet(); }
 });
+
+// ============================================================
+// PIX + REVIEWS
+// ============================================================
+const PROJECT_ID = 'mgc-financas';
+const PIX_KEY    = '4c6086a2-4bb8-474b-a4cf-ced8c8d82189';
+const PIX_NAME   = 'MGC Dev';
+const PIX_CITY   = 'Sao Raimundo';
+const REV_SB_URL = 'https://qvddbmlhucxndvbakvyd.supabase.co';
+const REV_SB_KEY = 'sb_publishable_0Saq2ZYXgGEApcbvWAahtw_VQ9b9iTq';
+let revClient = null;
+
+function initRevClient() {
+    try {
+        if (window.supabase && typeof window.supabase.createClient === 'function') {
+            revClient = window.supabase.createClient(REV_SB_URL, REV_SB_KEY);
+        }
+    } catch(e) { console.error('[Reviews] init:', e); }
+}
+initRevClient();
+
+// PIX — gerador EMV Banco Central
+function pixEmv(key, name, city, amount) {
+    const f = (id, val) => { const v = String(val); return id + String(v.length).padStart(2,'0') + v; };
+    const mai = f('26', f('00','BR.GOV.BCB.PIX') + f('01', key));
+    const adf = f('62', f('05','***'));
+    let emv = f('00','01') + mai + f('52','0000') + f('53','986') +
+        (amount && parseFloat(amount) > 0 ? f('54', parseFloat(amount).toFixed(2)) : '') +
+        f('58','BR') + f('59', name.slice(0,25)) + f('60', city.slice(0,15)) + adf + '6304';
+    let crc = 0xFFFF;
+    for (let i = 0; i < emv.length; i++) {
+        crc ^= emv.charCodeAt(i) << 8;
+        for (let j = 0; j < 8; j++) { crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1); crc &= 0xFFFF; }
+    }
+    return emv + crc.toString(16).toUpperCase().padStart(4,'0');
+}
+
+let _pixCode = '';
+
+function openPixModal() {
+    document.getElementById('pixModal').classList.remove('hidden');
+    _pixCode = pixEmv(PIX_KEY, PIX_NAME, PIX_CITY, '');
+    const container = document.getElementById('pixQrContainer');
+    const encoded   = encodeURIComponent(_pixCode);
+    const qr1 = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=4&data=' + encoded;
+    const qr2 = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&choe=UTF-8&chl=' + encoded;
+    container.innerHTML = `<img id="pixQrImg" src="${qr1}" width="200" height="200"
+        style="border-radius:8px;background:#fff;padding:6px;display:block;margin:0 auto" alt="QR Code PIX">
+        <p id="pixQrFallback" style="display:none;color:#9ca3af;font-size:0.8rem;text-align:center;margin-top:0.5rem">
+            Copie o código abaixo para pagar.</p>`;
+    document.getElementById('pixQrImg').onerror = function() {
+        this.src = qr2;
+        this.onerror = function() {
+            this.style.display = 'none';
+            document.getElementById('pixQrFallback').style.display = 'block';
+        };
+    };
+}
+function closePixModal() { document.getElementById('pixModal').classList.add('hidden'); }
+
+function copyPixCode() {
+    const btn = document.getElementById('pixCopyBtn');
+    const done = () => { btn.textContent = '✅ Copiado!'; setTimeout(() => { btn.textContent = 'Copiar código PIX'; }, 2000); };
+    navigator.clipboard.writeText(_pixCode).then(done).catch(() => {
+        const tmp = document.createElement('textarea');
+        tmp.value = _pixCode; document.body.appendChild(tmp); tmp.select();
+        document.execCommand('copy'); document.body.removeChild(tmp); done();
+    });
+}
+
+// REVIEWS
+let localReviews = (() => {
+    try { return JSON.parse(localStorage.getItem('mgc-financas_reviews') || '[]'); } catch(e) { return []; }
+})();
+let sharedReviews = [];
+
+function _escRev(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function mergeReviews(local, shared) {
+    const map = new Map();
+    [...shared, ...local].forEach(r => map.set(r.id, r));
+    return [...map.values()].sort((a,b) => new Date(b.ts||0).getTime() - new Date(a.ts||0).getTime());
+}
+
+async function loadSharedReviews() {
+    if (!revClient) return;
+    try {
+        const { data, error } = await revClient.from('app_reviews').select('*')
+            .eq('project_id', PROJECT_ID).order('ts', { ascending: false }).limit(200);
+        if (!error && data) sharedReviews = data;
+    } catch(e) { console.error('[Reviews] load', e); }
+}
+
+async function pushReviewToCloud(review) {
+    if (!revClient) return { ok: false, reason: 'revClient nulo — SDK não carregou' };
+    try {
+        const { error } = await revClient.from('app_reviews').insert({
+            id: review.id, project_id: PROJECT_ID, name: review.name,
+            comment: review.comment, stars: review.stars,
+            donated: review.donated, date: review.date, ts: review.ts
+        });
+        if (error) return { ok: false, reason: error.message };
+        return { ok: true };
+    } catch(e) { return { ok: false, reason: e.message }; }
+}
+
+function renderReviewsList() {
+    const el = document.getElementById('reviewsList');
+    if (!el) return;
+    const all = mergeReviews(localReviews, sharedReviews);
+    if (!all.length) {
+        el.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;text-align:center;padding:1rem 0">Nenhuma avaliação ainda. Seja o primeiro!</p>';
+        return;
+    }
+    el.innerHTML = all.map(r => `<div style="padding:0.55rem 0;border-bottom:1px solid rgba(148,163,184,0.12)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:0.82rem;font-weight:600">${_escRev(r.name||'Anônimo')}</span>
+            <span style="color:#facc15;font-size:0.9rem">${'★'.repeat(r.stars||0)}${'☆'.repeat(5-(r.stars||0))}</span>
+        </div>
+        ${r.comment ? `<p style="font-size:0.78rem;color:#9ca3af;margin-top:2px">${_escRev(r.comment)}</p>` : ''}
+        <span style="font-size:0.7rem;color:#6b7280">${_escRev(r.date||'')}</span>
+    </div>`).join('');
+}
+
+async function openReviewsModal(mode = 'list') {
+    if (!revClient) initRevClient();
+    document.getElementById('reviewsModal').classList.remove('hidden');
+    document.getElementById('reviewListMode').classList.toggle('hidden', mode !== 'list');
+    document.getElementById('reviewFormMode').classList.toggle('hidden', mode !== 'form');
+    document.getElementById('reviewThankYou').classList.add('hidden');
+    if (mode === 'list') {
+        document.getElementById('reviewsList').innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;text-align:center">Carregando...</p>';
+        await loadSharedReviews();
+        renderReviewsList();
+    }
+    if (mode === 'form') {
+        setReviewStar(0);
+        document.getElementById('reviewNameInput').value = '';
+        document.getElementById('reviewCommentInput').value = '';
+        document.getElementById('reviewDonatedCheck').checked = true;
+    }
+}
+function closeReviewsModal() { document.getElementById('reviewsModal').classList.add('hidden'); }
+
+function setReviewStar(n) {
+    document.getElementById('reviewStarInput').value = n;
+    document.querySelectorAll('.star-btn').forEach((btn, i) => {
+        btn.style.color = i < n ? '#facc15' : '#9ca3af';
+    });
+}
+
+async function submitReview() {
+    const stars   = parseInt(document.getElementById('reviewStarInput').value || '0');
+    const name    = document.getElementById('reviewNameInput').value.trim();
+    const comment = document.getElementById('reviewCommentInput').value.trim();
+    const donated = document.getElementById('reviewDonatedCheck').checked;
+    if (!stars) { alert('Selecione uma avaliação de 1 a 5 estrelas.'); return; }
+    if (!name)  { alert('Digite seu nome.'); return; }
+    const now = new Date();
+    const review = {
+        id: `${PROJECT_ID}_${now.getTime()}_${Math.random().toString(36).slice(2,7)}`,
+        name, comment, stars, donated,
+        date: now.toLocaleDateString('pt-BR'),
+        ts: now.toISOString()
+    };
+    localReviews = [review, ...localReviews];
+    try { localStorage.setItem('mgc-financas_reviews', JSON.stringify(localReviews)); } catch(e) {}
+    const result = await pushReviewToCloud(review);
+    document.getElementById('reviewFormMode').classList.add('hidden');
+    const tyMsg = document.getElementById('reviewThankMsg');
+    if (tyMsg) tyMsg.textContent = result?.ok
+        ? '✅ Avaliação sincronizada! Outros usuários já podem ver.'
+        : `⚠️ Salvo só neste dispositivo. Motivo: ${result?.reason || 'desconhecido'}`;
+    document.getElementById('reviewThankYou').classList.remove('hidden');
+}
 
 // Versão dinâmica via CHANGELOG.md — atualiza #appVersion no header desktop
 (async () => {
