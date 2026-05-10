@@ -208,8 +208,6 @@ Após configurar o GitHub Pages e acessar a URL pelo celular:
 
 ### Configurar Supabase
 
-> 🎬 **[Abrir Guia Animado de Configuração](https://magoc25.github.io/mgc-financas/guia-supabase.html)** — passo a passo visual com animação (abre em nova aba)
-
 #### 1. Criar conta e projeto
 1. Acesse [supabase.com](https://supabase.com) → **Start your project**
 2. Login com GitHub (ou e-mail)
