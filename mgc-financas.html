@@ -1092,6 +1092,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
 const APP_VERSION    = '4.3.0'; // atualizado por update-version.sh
+const LOCAL_VERSION  = '4.3.0'; // bumpar a cada release junto com APP_VERSION
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 const MONTH_COUNT    = 24;
@@ -3060,6 +3061,44 @@ async function submitReview() {
         el.textContent = ' · © MGC · ' + v;
         localStorage.setItem(CACHE_KEY, JSON.stringify({ v, ts: Date.now() }));
     } catch(e) { /* offline — mantém valor do HTML */ }
+})();
+
+// Banner de nova versão via Supabase — verifica app_config uma vez por dia
+(async () => {
+    if (!revClient) return;
+    const CACHE_KEY = 'mgc-financas_update_check';
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < CACHE_TTL) return;
+    try {
+        const { data, error } = await revClient
+            .from('app_config')
+            .select('value')
+            .eq('project_id', PROJECT_ID)
+            .eq('key', 'version')
+            .single();
+        if (error || !data) return;
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now() }));
+        const remote = data.value.replace(/^v/, '');
+        const parse = v => v.split('.').map(Number);
+        const [ra, rb, rc] = parse(remote);
+        const [la, lb, lc] = parse(LOCAL_VERSION);
+        const isNewer = ra > la || (ra === la && rb > lb) || (ra === la && rb === lb && rc > lc);
+        if (!isNewer) return;
+        const banner = document.createElement('div');
+        banner.id = 'updateBanner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a73e8;' +
+            'color:#fff;display:flex;align-items:center;justify-content:space-between;' +
+            'padding:10px 16px;font-size:14px;gap:12px;';
+        banner.innerHTML = `<span>🆕 Nova versão disponível (v${remote}) — recarregue o app para atualizar.</span>
+            <div style="display:flex;gap:8px;flex-shrink:0">
+                <button onclick="location.reload(true)" style="background:#fff;color:#1a73e8;border:none;
+                    border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:600">Recarregar</button>
+                <button onclick="document.getElementById('updateBanner').remove()" style="background:transparent;
+                    color:#fff;border:none;font-size:18px;cursor:pointer;line-height:1">✕</button>
+            </div>`;
+        document.body.prepend(banner);
+    } catch(e) {}
 })();
 
 inicializar();
