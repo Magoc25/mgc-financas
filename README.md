@@ -1,6 +1,6 @@
 # 💰 MGC Finanças
 
-> **Dashboard financeiro pessoal completo, gratuito e open-source — sem instalação, sem servidor obrigatório.**
+> **Dashboard financeiro pessoal completo, gratuito e com código-fonte disponível — sem instalação, sem servidor obrigatório.**
 
 Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
