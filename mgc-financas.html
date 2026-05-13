@@ -2121,11 +2121,19 @@ function renderDashboard() {
         return matchCard && matchStore && matchMonth;
     });
 
+    // Para os totais do gráfico de barras, filtrar apenas por cartão/categoria (sem filtro de mês),
+    // senão meses que não coincidem com o mês selecionado ficam com valores incorretos.
+    const dataForChart = processedData.filter(item => {
+        const matchCard  = selectedCard  === 'Todos' || item.card === selectedCard;
+        const matchStore = selectedStore === 'Todos' || item.category === selectedStore;
+        return matchCard && matchStore;
+    });
+
     let monthlyFaturasTotals = new Array(visibleMonths).fill(0);
     let grandTotalDebt       = 0;
     let categoryTotalsThisMonth = {};
 
-    filteredData.forEach(item => {
+    dataForChart.forEach(item => {
         grandTotalDebt += item.totalItemDebt;
         item.projections.forEach((val, i) => {
             monthlyFaturasTotals[i] += val;
