@@ -892,27 +892,33 @@ on conflict (id) do nothing;</div>
     <div class="lg:col-span-1 space-y-6">
         <div class="bg-white p-6 rounded-lg shadow-md h-fit border border-emerald-100">
             <h2 class="text-lg font-semibold mb-3 text-emerald-700">Fontes de Renda</h2>
+            <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead id="rendasHead"></thead>
                 <tbody class="divide-y divide-gray-100" id="rendasBody"></tbody>
                 <tfoot><tr class="bg-emerald-50 font-bold text-emerald-800"><td class="px-2 py-3">TOTAL RENDA</td><td class="px-2 py-3 text-right" id="rendasTotal" colspan="2">R$ 0,00</td></tr></tfoot>
             </table>
+            </div>
         </div>
         <div class="bg-white p-6 rounded-lg shadow-md h-fit border border-orange-100">
             <h2 class="text-lg font-semibold mb-3 text-orange-700">Despesas Fixas</h2>
+            <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead id="fixasHead"></thead>
                 <tbody class="divide-y divide-gray-100" id="fixedExpensesBody"></tbody>
                 <tfoot><tr class="bg-orange-50 font-bold text-orange-800"><td class="px-2 py-3">TOTAL FIXO</td><td class="px-2 py-3 text-right" id="fixedExpensesTotal" colspan="2">R$ 0,00</td></tr></tfoot>
             </table>
+            </div>
         </div>
         <div class="bg-white p-6 rounded-lg shadow-md h-fit border border-red-100">
             <h2 class="text-lg font-semibold mb-3 text-red-700">Cheque Especial / Dívidas</h2>
+            <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead id="dividasHead"></thead>
                 <tbody class="divide-y divide-gray-100" id="dividasBody"></tbody>
                 <tfoot><tr class="bg-red-50 font-bold text-red-800"><td class="px-2 py-3">TOTAL EXTRAS</td><td class="px-2 py-3 text-right" id="dividasTotal" colspan="2">R$ 0,00</td></tr></tfoot>
             </table>
+            </div>
         </div>
     </div>
     <div class="bg-white p-6 rounded-lg shadow-md lg:col-span-3">
