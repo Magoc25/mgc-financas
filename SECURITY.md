@@ -21,7 +21,11 @@ O MGC Finanças adota um modelo de **três camadas** que minimiza a exposição 
 ### 2.1 Proteção contra XSS (Cross-Site Scripting)
 
 - **Função `esc()`** aplicada em todos os campos de entrada do usuário renderizados via `innerHTML` — previne injeção de HTML/JavaScript
-- **Content Security Policy (CSP)** no `<head>` — bloqueia carregamento de scripts externos não autorizados e exfiltração de dados
+- **Content Security Policy (CSP)** no `<head>` — bloqueia carregamento de scripts externos não autorizados e exfiltração de dados. Diretivas ativas:
+  - `script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net`
+  - `connect-src 'self' https://*.supabase.co`
+  - `img-src 'self' data: blob: https://api.qrserver.com https://chart.googleapis.com`
+  - `object-src 'none'` · `base-uri 'self'` · `form-action 'self'`
 - Avaliações públicas (reviews) passam por escaping antes de renderização — vetor crítico (um-para-muitos) protegido
 
 ### 2.2 Backend (Supabase compartilhado — avaliações)
