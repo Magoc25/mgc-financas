@@ -287,12 +287,12 @@ O Supabase pode suspender projetos gratuitos sem atividade por 7 dias consecutiv
 ```sql
 SELECT cron.schedule(
   'mgc-financas-keep-alive',
-  '0 8 * * 1',
+  '0 8 * * *',
   $$SELECT COUNT(*) FROM public.finance_data$$
 );
 ```
 
-> Agenda uma consulta toda segunda-feira às 5h Brasília — funciona de forma autônoma a partir daí.
+> Agenda uma consulta todos os dias às 5h Brasília — funciona de forma autônoma a partir daí.
 > Para confirmar que foi criado: `SELECT * FROM cron.job;`
 
 ---
