@@ -1,6 +1,6 @@
 # Termos de Uso — MGC Finanças
 
-**Versão:** 4.3.0 · **Data:** Maio de 2026
+**Versão:** 4.4.0 · **Data:** Maio de 2026
 **Desenvolvedor:** Marlon Gomes da Costa (MGC Dev) · marlongc25@protonmail.com
 
 ---
@@ -82,15 +82,40 @@ O MGC Finanças foi projetado com privacidade por padrão:
 - **Ping anônimo de dispositivos ativos:** o app envia um ping anônimo por dia ao Supabase do autor para contagem de dispositivos ativos. O ping contém apenas: nome do app, versão, data e um identificador aleatório gerado no dispositivo (sem vínculo com dados pessoais). Não é possível identificar o usuário a partir deste dado.
 - **Repositório público:** o código no GitHub não contém dados do usuário nem credenciais.
 
+Para informações detalhadas sobre coleta, finalidades, bases legais e direitos do titular, consulte:
+
+- [PRIVACY.md](./PRIVACY.md) — Aviso de Privacidade completo (LGPD Art. 9º)
+- [SECURITY.md](./SECURITY.md) — Política de Segurança (LGPD Art. 46-49 + ANPD Res. 15/2024)
+- [DATA_INVENTORY.md](./DATA_INVENTORY.md) — Inventário de tratamento de dados (LGPD Art. 37)
+
 ---
 
-## 7. Foro legal
+## 7. Obrigações do usuário quanto a atualizações de segurança
+
+O usuário é responsável por instalar as atualizações do MGC Finanças quando disponibilizadas pelo desenvolvedor. O app exibe automaticamente um banner de notificação quando uma nova versão está disponível.
+
+A ausência de atualização pelo usuário, após notificação disponibilizada pelo app, pode configurar **culpa concorrente** nos termos do [Art. 945 do Código Civil](https://www.planalto.gov.br/ccivil_03/leis/2002/l10406compilada.htm), excluindo ou reduzindo proporcionalmente a responsabilidade do desenvolvedor por eventuais danos resultantes de vulnerabilidade que teria sido corrigida pela atualização disponibilizada.
+
+Esta obrigação aplica-se especialmente a:
+
+- Atualizações marcadas com 🔒 Security no [CHANGELOG.md](./CHANGELOG.md)
+- Versões que corrijam vulnerabilidades comunicadas publicamente
+
+---
+
+## 8. Acessibilidade
+
+O desenvolvedor adota esforços razoáveis, proporcionais ao porte do projeto (ATPP), para tornar o app acessível, conforme declarado em [ACCESSIBILITY.md](./ACCESSIBILITY.md). Limitações conhecidas estão documentadas nesse arquivo. Relatos de barreiras de acessibilidade podem ser enviados para marlongc25@protonmail.com.
+
+---
+
+## 9. Foro legal
 
 Para quaisquer disputas relacionadas a estes termos, fica eleito o foro da comarca de **São Raimundo das Mangabeiras — MA, Brasil**.
 
 ---
 
-## 8. Alterações nos termos
+## 10. Alterações nos termos
 
 O autor reserva-se o direito de alterar estes termos a qualquer momento. Alterações relevantes serão registradas no `CHANGELOG.md`. O uso continuado do app após alterações implica aceitação dos novos termos.
 

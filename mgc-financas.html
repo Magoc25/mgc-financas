@@ -10,6 +10,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>MGC Finanças</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.qrserver.com https://chart.googleapis.com; connect-src 'self' https://*.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
     <meta name="theme-color" content="#1e3a8a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -1169,6 +1170,7 @@ function getColor(cat) {
     return EXTRA_COLORS[Math.max(0, idx) % EXTRA_COLORS.length];
 }
 function formatCurrency(val) { return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 function isDark() { return document.documentElement.classList.contains('dark'); }
 function chartTextColor()  { return isDark() ? '#94a3b8' : '#6b7280'; }
 function chartGridColor()  { return isDark() ? '#334155' : '#e5e7eb'; }
@@ -1202,13 +1204,13 @@ function normalizarAppData(data) {
 function rebuildFormSelects() {
     const cartoes = getCartoes();
     const cats    = getCategorias();
-    const catOpts = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+    const catOpts = cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
     // newType
     const newType = document.getElementById('newType');
     const prevType = newType.value;
     newType.innerHTML =
-        cartoes.map(c => `<option value="${c}">Cartão: ${c}</option>`).join('') +
+        cartoes.map(c => `<option value="${esc(c)}">Cartão: ${esc(c)}</option>`).join('') +
         `<option value="Fixa">Despesa Fixa (Recorrente)</option>
          <option value="Divida">Dívida Extra / Cheque Especial</option>
          <option value="Renda">Renda / Receita</option>`;
@@ -1217,7 +1219,7 @@ function rebuildFormSelects() {
     // filterCard
     const fc = document.getElementById('filterCard');
     const prevCard = fc.value;
-    fc.innerHTML = '<option value="Todos">Todos os Cartões</option>' + cartoes.map(c => `<option value="${c}">${c}</option>`).join('');
+    fc.innerHTML = '<option value="Todos">Todos os Cartões</option>' + cartoes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
     if ([...fc.options].some(o => o.value === prevCard)) fc.value = prevCard;
 
     // category selects — preserva seleção anterior
@@ -1386,14 +1388,14 @@ function renderManagerModal() {
         const limites = appData.limites || {};
         document.getElementById('categoriasList').innerHTML = cats.map(cat => {
             const removeBtn = cats.length > 1
-                ? `<button class="tag-remove" onclick="removerCategoria('${cat}')" title="Remover">✕</button>`
+                ? `<button class="tag-remove" onclick="removerCategoria('${esc(cat)}')" title="Remover">✕</button>`
                 : `<span class="text-xs text-gray-300">única</span>`;
             const limite = limites[cat] || '';
             return `<div class="manager-tag">
                 <span style="width:8px;height:8px;border-radius:50%;background:${getColor(cat)};display:inline-block;flex-shrink:0"></span>
-                ${cat}
+                ${esc(cat)}
                 <input class="limit-input" type="number" min="0" step="50" placeholder="Limite R$" value="${limite}"
-                    onchange="salvarLimite('${cat}', this.value)" title="Limite mensal (R$)">
+                    onchange="salvarLimite('${esc(cat)}', this.value)" title="Limite mensal (R$)">
                 ${removeBtn}
             </div>`;
         }).join('');
@@ -1401,8 +1403,8 @@ function renderManagerModal() {
         const cartoes = getCartoes();
         document.getElementById('cartoesList').innerHTML = cartoes.map(card => `
             <div class="manager-tag">
-                ${card}
-                ${cartoes.length > 1 ? `<button class="tag-remove" onclick="removerCartao('${card}')" title="Remover">✕</button>` : `<span class="text-xs text-gray-300">único</span>`}
+                ${esc(card)}
+                ${cartoes.length > 1 ? `<button class="tag-remove" onclick="removerCartao('${esc(card)}')" title="Remover">✕</button>` : `<span class="text-xs text-gray-300">único</span>`}
             </div>`).join('');
     }
 }
@@ -1478,7 +1480,7 @@ function renderMetasModal() {
             <div class="flex justify-between items-start gap-2">
                 <div class="flex-1">
                     <div class="flex items-center gap-2">
-                        <span class="text-sm font-semibold text-gray-700" style="color:inherit">${m.name}</span>
+                        <span class="text-sm font-semibold text-gray-700" style="color:inherit">${esc(m.name)}</span>
                         ${pct >= 100 ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Concluída!</span>' : ''}
                     </div>
                     <p class="text-xs text-gray-400 mt-0.5">${formatCurrency(m.acumulado)} de ${formatCurrency(m.target)}${m.mensal > 0 ? ` · R$${m.mensal.toLocaleString('pt-BR')}/mês` : ''}${mesesRestantes ? ` · ~${mesesRestantes} meses` : ''}</p>
@@ -1556,7 +1558,7 @@ function renderMetasSection() {
         const mesesRestantes = m.mensal > 0 && m.target > m.acumulado ? Math.ceil((m.target - m.acumulado) / m.mensal) : null;
         return `<div class="goal-card">
             <div class="flex justify-between items-center">
-                <h3 class="text-xs font-semibold text-gray-600 truncate">${m.name}</h3>
+                <h3 class="text-xs font-semibold text-gray-600 truncate">${esc(m.name)}</h3>
                 <button onclick="abrirMetas()" class="text-gray-300 hover:text-indigo-500 text-xs ml-1" title="Editar metas">✎</button>
             </div>
             <p class="text-base font-bold text-gray-800 mt-1" style="color:inherit">${formatCurrency(m.acumulado)}
@@ -1713,7 +1715,7 @@ function removerItem(tipo, index) {
 
     const el = document.createElement('div');
     el.className = 'toast toast-warning';
-    el.innerHTML = `<span class="toast-icon">⚠</span><span style="flex:1">"${removed.name}" removido.</span>
+    el.innerHTML = `<span class="toast-icon">⚠</span><span style="flex:1">"${esc(removed.name)}" removido.</span>
         <button onclick="desfazerRemocao()" style="margin-left:8px;padding:2px 10px;background:rgba(255,255,255,0.2);border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;color:inherit;white-space:nowrap">↩ Desfazer</button>`;
     document.getElementById('toastContainer').appendChild(el);
     requestAnimationFrame(() => el.classList.add('show'));
@@ -1951,7 +1953,7 @@ function renderPagamentos() {
             if (pago) totalPago += f.amount;
             fixasHtml += `<div class="pag-item ${pago ? 'pago' : ''}" onclick="togglePagFixa(${i})">
                 <input type="checkbox" ${pago ? 'checked' : ''}>
-                <span class="pag-nome">${f.name}</span>
+                <span class="pag-nome">${esc(f.name)}</span>
                 <span class="pag-valor">${formatCurrency(f.amount)}</span>
             </div>`;
         });
@@ -1971,9 +1973,9 @@ function renderPagamentos() {
             const pago = p.cartoes.includes(card);
             totalGeral += val;
             if (pago) totalPago += val;
-            cartoesHtml += `<div class="pag-item ${pago ? 'pago' : ''}" onclick="togglePagCartao('${card}')">
+            cartoesHtml += `<div class="pag-item ${pago ? 'pago' : ''}" onclick="togglePagCartao('${esc(card)}')">
                 <input type="checkbox" ${pago ? 'checked' : ''}>
-                <span class="pag-nome">${card}</span>
+                <span class="pag-nome">${esc(card)}</span>
                 <span class="pag-valor">${formatCurrency(val)}</span>
             </div>`;
         });
@@ -2077,7 +2079,7 @@ function processarDadosERenderizar() {
     let rendasHTML = '';
     aplicarSort(appData.rendas.map((item, i) => ({...item, _i: i})), 'rendas').forEach(item => {
         rendasHTML += `<tr class="hover:bg-gray-50 text-gray-700">
-            <td class="px-2 py-2 whitespace-nowrap">${item.name}</td>
+            <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)}</td>
             <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-emerald-600">${formatCurrency(item.amount)}</td>
             <td class="px-1 py-2 text-center w-16">
                 <button onclick="editarItem('renda',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
@@ -2097,7 +2099,7 @@ function processarDadosERenderizar() {
     let fixedHTML = '';
     aplicarSort(appData.fixas.map((item, i) => ({...item, _i: i})), 'fixas').forEach(item => {
         fixedHTML += `<tr class="hover:bg-gray-50 text-gray-700">
-            <td class="px-2 py-2 whitespace-nowrap">${item.name}</td>
+            <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)}</td>
             <td class="px-2 py-2 whitespace-nowrap text-right font-medium">${formatCurrency(item.amount)}</td>
             <td class="px-1 py-2 text-center w-16">
                 <button onclick="editarItem('fixa',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
@@ -2239,7 +2241,7 @@ function renderAlertBanner(categoryTotals, mesRef) {
         const limite = limites[cat];
         const atual  = categoryTotals[cat] || 0;
         if (atual > limite) {
-            alerts.push(`<span class="alert-chip">⚠ ${cat}: ${formatCurrency(atual)} / limite ${formatCurrency(limite)}</span>`);
+            alerts.push(`<span class="alert-chip">⚠ ${esc(cat)}: ${formatCurrency(atual)} / limite ${formatCurrency(limite)}</span>`);
         }
     }
 
@@ -2355,7 +2357,7 @@ function renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef,
     }
 
     if (maxCatValue > 0 && maxCatName !== 'Nenhum Gasto') {
-        partes.push(`O maior gasto de cartão é <strong>${maxCatName}</strong> com <strong>${formatCurrency(maxCatValue)}</strong>.`);
+        partes.push(`O maior gasto de cartão é <strong>${esc(maxCatName)}</strong> com <strong>${formatCurrency(maxCatValue)}</strong>.`);
     }
 
     if (valorDividaRef > 0) {
@@ -2531,7 +2533,7 @@ function renderDividasTable(selectedMonthIndex) {
         const si = item.mesInicio ? monthNames.indexOf(item.mesInicio) : 0;
         if (selectedMonthIndex === -1 || si === selectedMonthIndex) {
             html += `<tr class="hover:bg-red-50 text-gray-700">
-                <td class="px-2 py-2 whitespace-nowrap">${item.name} <span class="text-xs text-red-400">(${item.mesInicio || monthNames[HISTORY_COUNT]})</span></td>
+                <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)} <span class="text-xs text-red-400">(${item.mesInicio || monthNames[HISTORY_COUNT]})</span></td>
                 <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-red-600">${formatCurrency(item.amount)}</td>
                 <td class="px-1 py-2 text-center w-16">
                     <button onclick="editarItem('divida',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
@@ -2583,10 +2585,10 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
         aplicarSort(filteredData, 'faturas').forEach(item => {
             const badgeColor = item.card === 'Mercado Pago' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
             let row = `<tr class="hover:bg-gray-50 text-gray-700">
-                <td class="px-4 py-3 whitespace-nowrap fat-s1"><span class="px-2 py-1 rounded text-xs font-medium ${badgeColor}">${item.card}</span></td>
+                <td class="px-4 py-3 whitespace-nowrap fat-s1"><span class="px-2 py-1 rounded text-xs font-medium ${badgeColor}">${esc(item.card)}</span></td>
                 <td class="px-4 py-3 whitespace-nowrap fat-s2">
-                    <div class="font-medium">${item.category}</div>
-                    <div class="text-xs text-gray-400 uppercase">${item.name}</div>
+                    <div class="font-medium">${esc(item.category)}</div>
+                    <div class="text-xs text-gray-400 uppercase">${esc(item.name)}</div>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-center fat-s3">${item.curr}/${item.total}</td>`;
             item.projections.forEach((val, i) => {
@@ -2723,7 +2725,7 @@ function abrirHistorico() {
             <td class="text-gray-500 whitespace-nowrap">${h.ts}</td>
             <td><span class="hist-badge ${ACAO_CLASS[h.acao] || ''}">${ACAO_LABEL[h.acao] || h.acao}</span></td>
             <td class="text-gray-600 capitalize">${TIPO_LABEL[h.tipo] || h.tipo}</td>
-            <td class="text-gray-700 font-medium">${h.nome}</td>
+            <td class="text-gray-700 font-medium">${esc(h.nome)}</td>
             <td class="text-gray-700 whitespace-nowrap text-right">${h.valor != null ? formatCurrency(h.valor) : '-'}</td>
         </tr>`).join('');
     }
@@ -2990,7 +2992,7 @@ let localReviews = (() => {
 })();
 let sharedReviews = [];
 
-function _escRev(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const _escRev = esc;
 
 function mergeReviews(local, shared) {
     const map = new Map();
