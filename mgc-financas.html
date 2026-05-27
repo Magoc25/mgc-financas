@@ -2050,7 +2050,7 @@ function processarDadosERenderizar() {
         }
 
         for (let i = 0; i < visibleMonths; i++) {
-            if (remaining > 0 && i >= si && i < si + remaining) { projections.push(item.amount); totalItemDebt += item.amount; }
+            if (remaining > 0 && i >= si && i < si + remaining) { projections.push(item.amount); if (i >= HISTORY_COUNT) totalItemDebt += item.amount; }
             else projections.push(0);
         }
         return { ...item, category: item.category || 'Outros', projections, totalItemDebt, originalIndex: idx };
