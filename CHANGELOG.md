@@ -5,6 +5,45 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.4.0] — Junho 2026
+
+### 🆕 Adicionado
+- Sistema PIX (modal de apoio com QR Code e cópia de código)
+- Sistema de avaliações compartilhadas (Reviews via Supabase)
+- Botões ☕ Apoiar e ⭐ Avaliações na aba Início
+- Banner de notificação de nova versão via Supabase
+- Ping anônimo de dispositivos ativos (app_pings)
+- GitHub Action keep-alive para Supabase de reviews
+- GitHub Action update-stats para contagem de dispositivos ativos
+- Arquivo `.nojekyll` para GitHub Pages
+- `TERMS.md` — termos de uso
+- `LICENSE.md` — licença de uso não comercial
+- `stats.json` — contagem de dispositivos ativos (30 dias)
+- Seções "Por que usar?" e "O que são os arquivos?" no README
+
+### 🔧 Melhorado
+- `manifest.json`: display_override, lang pt-BR, categories, orientation any
+- `<head>` HTML: copyright, link rel="icon", apple-touch-icon com href
+- Versão exibida no rodapé via fetch do CHANGELOG.md (dinâmico)
+- `TERMS.md`: novas seções 7 (obrigações do usuário sobre atualizações — culpa concorrente), 8 (acessibilidade) e referências cruzadas aos documentos legais
+- `README.md`: pg_cron keep-alive corrigido de semanal (`* * 1`) para diário (`* * *`)
+
+### 🔒 Segurança
+- **Função `esc()`** adicionada — sanitização HTML de todos os campos de usuário renderizados via innerHTML (19 pontos protegidos: nomes de categorias, cartões, despesas, rendas, metas, dívidas, histórico, notificações)
+- **Content Security Policy (CSP)** adicionada ao `<head>` — bloqueia exfiltração de dados e carregamento de scripts não autorizados
+- `_escRev` unificado com `esc()` (mais completa: inclui escaping de `"` e `'`)
+
+### 📄 Documentação legal
+- `PRIVACY.md` — Aviso de Privacidade (LGPD Art. 9º + Art. 18), adaptado ao modelo de três camadas do app
+- `SECURITY.md` — Política de Segurança + plano de resposta a incidentes (LGPD Art. 46-49 + ANPD Res. 15/2024)
+- `ACCESSIBILITY.md` — Declaração de Acessibilidade (LBI Art. 63 + WCAG 2.2 + ABNT NBR 17225:2025)
+- `DATA_INVENTORY.md` — Inventário de tratamento de dados simplificado (LGPD Art. 37 + ANPD Res. 2/2022)
+
+### 🐛 Corrigido
+- **"Dívida Cartões (Futuro)" exibindo valor inflado** — `totalItemDebt` acumulava parcelas dos 12 meses de histórico passado junto com as futuras; corrigido para contar apenas a partir do mês atual (`HISTORY_COUNT`)
+
+---
+
 ## [4.3.0] — Maio 2026
 
 ### 🔧 Melhorado
