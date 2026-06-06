@@ -117,6 +117,45 @@
             #mainFormSection { display: block !important; }
         }
 
+        /* ── MÓDULO INVESTIMENTOS (v4.5.0) ────────────────────── */
+        #ctxSwitch {
+            display: flex; gap: 4px; background: #eef2ff; border: 1px solid #e0e7ff;
+            border-radius: 12px; padding: 4px; max-width: 360px; margin: 1.25rem auto 0;
+        }
+        html.dark #ctxSwitch { background: #1e293b; border-color: #334155; }
+        .ctx-btn {
+            flex: 1; padding: 0.55rem 0.5rem; border: none; background: transparent;
+            border-radius: 9px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+            color: #6366f1; display: flex; align-items: center; justify-content: center; gap: 0.35rem;
+            transition: background 0.2s, color 0.2s; -webkit-tap-highlight-color: transparent;
+        }
+        html.dark .ctx-btn { color: #a5b4fc; }
+        .ctx-btn.ctx-active { background: #4f46e5; color: #fff; box-shadow: 0 2px 8px rgba(79,70,229,0.35); }
+        html.dark .ctx-btn.ctx-active { background: #6366f1; }
+        #ctxInvestir { display: none; }
+        body.ctx-investir #ctxContas { display: none; }
+        body.ctx-investir #ctxInvestir { display: block; }
+        body.ctx-investir #headerFilters { display: none; }
+        body.ctx-investir #headerExportRow { display: none !important; }
+        @media (max-width: 767px) {
+            .inv-section { display: none !important; }
+            .inv-section.inv-active { display: block !important; }
+        }
+        @media (min-width: 768px) {
+            .inv-section { display: block !important; }
+        }
+        #mobileNav #navInnerInvestir { display: none; }
+        body.ctx-investir #mobileNav #navInnerContas { display: none; }
+        body.ctx-investir #mobileNav #navInnerInvestir { display: flex; }
+        .inv-range { width: 100%; accent-color: #4f46e5; }
+        .inv-chip {
+            padding: 0.3rem 0.7rem; border-radius: 9999px; border: 1px solid #e0e7ff;
+            background: #eef2ff; color: #4f46e5; font-size: 0.75rem; font-weight: 600;
+            cursor: pointer; transition: all 0.15s; -webkit-tap-highlight-color: transparent;
+        }
+        html.dark .inv-chip { background: #1e293b; border-color: #334155; color: #a5b4fc; }
+        .inv-chip:active { transform: scale(0.94); }
+
         /* Form bottom sheet */
         #formSheet {
             position: fixed; inset: 0; z-index: 5000;
@@ -623,7 +662,7 @@ on conflict (id) do nothing;</div>
             </button>
         </div>
     </div>
-    <div class="flex flex-col md:flex-row gap-4 w-full xl:w-auto mt-4 xl:mt-0">
+    <div id="headerFilters" class="flex flex-col md:flex-row gap-4 w-full xl:w-auto mt-4 xl:mt-0">
         <div class="flex-1 md:w-40">
             <label class="block text-sm font-medium text-gray-700">Mês:</label>
             <select id="filterMonth" class="mt-1 block w-full pl-3 pr-8 py-2 text-sm border-gray-300 rounded-md border"></select>
@@ -640,6 +679,15 @@ on conflict (id) do nothing;</div>
         </div>
     </div>
 </div>
+
+<!-- ── CONTEXT SWITCHER (Contas ↔ Investir) ──────────────── -->
+<div id="ctxSwitch">
+    <button id="ctxBtnContas" class="ctx-btn ctx-active" onclick="switchContext('contas')">💳 Contas</button>
+    <button id="ctxBtnInvestir" class="ctx-btn" onclick="switchContext('investir')">📈 Investir</button>
+</div>
+
+<!-- ══════════ CONTEXT: CONTAS ══════════ -->
+<div id="ctxContas">
 
 <!-- FORM -->
 <div id="mainFormSection" class="mt-6">
@@ -935,6 +983,90 @@ on conflict (id) do nothing;</div>
 </div>
 
 </div><!-- /secDados -->
+</div><!-- ══════════ /CONTEXT: CONTAS ══════════ -->
+
+<!-- ══════════ CONTEXT: INVESTIR ══════════ -->
+<div id="ctxInvestir" class="space-y-4 mt-6">
+
+<div class="bg-gradient-to-br from-indigo-600 to-blue-600 text-white p-5 rounded-lg shadow-md">
+    <h2 class="text-lg font-bold">📈 Investimentos</h2>
+    <p class="text-sm text-indigo-100 mt-1">Simule renda fixa, compare produtos e planeje seus aportes. Cálculos 100% locais — nada é enviado a servidores.</p>
+</div>
+
+<!-- ── INV: SIMULAR ──────────────────────────────────────── -->
+<div id="invSecSimular" class="inv-section inv-active space-y-4">
+  <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-indigo-500">
+    <h3 class="text-base font-semibold text-indigo-700 mb-4">Simulador de Renda Fixa</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Produto</label>
+        <select id="invTipo" class="mt-1 block w-full pl-3 pr-8 py-2 text-sm border-gray-300 rounded-md border focus:ring-indigo-500 focus:border-indigo-500" onchange="invOnTipoChange()">
+          <option value="poupanca">Poupança (isento de IR)</option>
+          <option value="cdb">CDB prefixado (tributado)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Taxa <span id="invTaxaHint" class="text-xs text-gray-400"></span></label>
+        <div class="flex items-center gap-2 mt-1">
+          <input type="number" step="0.1" min="0" id="invTaxa" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+          <span class="text-sm text-gray-500 whitespace-nowrap">% a.a.</span>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Valor inicial (R$)</label>
+        <input type="number" step="0.01" min="0" id="invValorInicial" value="1000" class="mt-1 block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Aporte mensal (R$)</label>
+        <input type="number" step="0.01" min="0" id="invAporte" value="200" class="mt-1 block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+        <button type="button" id="invSobraBtn" onclick="invUsarSobra()" class="text-xs text-indigo-600 hover:underline mt-1 hidden"></button>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="block text-sm font-medium text-gray-700">Prazo: <span id="invPrazoLabel" class="font-semibold text-indigo-700">60 meses (5 anos)</span></label>
+        <input type="range" min="6" max="240" step="6" value="60" id="invPrazo" class="inv-range mt-2" oninput="invOnInput()">
+        <div class="flex flex-wrap gap-2 mt-2">
+          <button type="button" class="inv-chip" onclick="invSetPrazo(12)">1 ano</button>
+          <button type="button" class="inv-chip" onclick="invSetPrazo(24)">2 anos</button>
+          <button type="button" class="inv-chip" onclick="invSetPrazo(60)">5 anos</button>
+          <button type="button" class="inv-chip" onclick="invSetPrazo(120)">10 anos</button>
+        </div>
+      </div>
+    </div>
+    <p class="text-xs text-gray-400 mt-3" id="invTaxaInfo"></p>
+  </div>
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="invResultCards"></div>
+
+  <div class="bg-white p-4 rounded-lg shadow-md">
+    <h3 class="text-sm font-semibold text-gray-600 mb-2">Evolução do saldo</h3>
+    <div style="position:relative;height:240px"><canvas id="invChart"></canvas></div>
+  </div>
+
+  <button onclick="invSalvarCenario()" class="w-full py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">💾 Salvar cenário</button>
+</div>
+
+<!-- ── INV: COMPARAR ─────────────────────────────────────── -->
+<div id="invSecComparar" class="inv-section space-y-4">
+  <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-emerald-500">
+    <h3 class="text-base font-semibold text-emerald-700 mb-1">Poupança × CDB</h3>
+    <p class="text-xs text-gray-400 mb-3">Mesmo cenário do simulador, lado a lado.</p>
+    <div id="invComparTable"></div>
+  </div>
+  <div class="bg-white p-4 rounded-lg shadow-md">
+    <h3 class="text-sm font-semibold text-gray-600 mb-2">Valor líquido final</h3>
+    <div style="position:relative;height:220px"><canvas id="invComparChart"></canvas></div>
+  </div>
+</div>
+
+<!-- ── INV: CENÁRIOS ─────────────────────────────────────── -->
+<div id="invSecCenarios" class="inv-section space-y-4">
+  <div class="bg-white p-5 rounded-lg shadow-md">
+    <h3 class="text-base font-semibold text-gray-700 mb-3">Cenários salvos</h3>
+    <div id="invCenariosList" class="space-y-2"></div>
+  </div>
+</div>
+
+</div><!-- /ctxInvestir -->
 
 <div class="mt-10 mb-2 text-center text-sm text-gray-400 font-medium">
     &copy; <script>document.write(new Date().getFullYear())</script> MGC &middot; <span id="appVersionFooter"></span>
@@ -1193,6 +1325,16 @@ function normalizarAppData(data) {
     if (!data.metas)      data.metas    = [];
     if (!data.historico)  data.historico = [];
     if (!data.pagamentos) data.pagamentos = {};
+    // Investimentos (módulo v4.5.0)
+    if (!data.investimentos || typeof data.investimentos !== 'object') data.investimentos = {};
+    if (!Array.isArray(data.investimentos.cenarios)) data.investimentos.cenarios = [];
+    if (!data.investimentos.config || typeof data.investimentos.config !== 'object') data.investimentos.config = {};
+    { const _ic = data.investimentos.config;
+      if (_ic.cdiAnual == null)       _ic.cdiAnual = 0.1075;
+      if (_ic.selicAnual == null)     _ic.selicAnual = 0.1075;
+      if (_ic.ipcaAnual == null)      _ic.ipcaAnual = 0.045;
+      if (_ic.poupancaMensal == null) _ic.poupancaMensal = 0.005;
+      if (_ic.inflacaoEst == null)    _ic.inflacaoEst = 0.045; }
     // Migrate legacy single meta
     if (data.meta > 0 && data.metas.length === 0) {
         data.metas.push({ id: Date.now(), name: 'Meta Mensal', target: data.meta * 12, mensal: data.meta, acumulado: 0 });
@@ -3167,7 +3309,286 @@ async function submitReview() {
     } catch(e) {}
 })();
 
+// ============================================================
+// MÓDULO INVESTIMENTOS (v4.5.0)
+// ============================================================
+let _activeContext    = 'contas';
+let _activeInvSection = 'simular';
+let invChart       = null;
+let invComparChart = null;
+
+function switchContext(ctx) {
+    _activeContext = ctx;
+    document.body.classList.toggle('ctx-investir', ctx === 'investir');
+    document.getElementById('ctxBtnContas').classList.toggle('ctx-active', ctx === 'contas');
+    document.getElementById('ctxBtnInvestir').classList.toggle('ctx-active', ctx === 'investir');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (ctx === 'investir') invRenderAll();
+}
+
+function navToInv(sec) {
+    _activeInvSection = sec;
+    const secMap = { simular: 'invSecSimular', comparar: 'invSecComparar', cenarios: 'invSecCenarios' };
+    Object.entries(secMap).forEach(([k, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('inv-active', k === sec);
+    });
+    const navMap = { simular: 'invNavSimular', comparar: 'invNavComparar', cenarios: 'invNavCenarios' };
+    Object.entries(navMap).forEach(([k, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('nav-active', k === sec);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (sec === 'simular')  invRenderResultado();
+    if (sec === 'comparar') invRenderComparar();
+    if (sec === 'cenarios') invRenderCenarios();
+}
+
+// ── Motor de cálculo (funções puras) ──────────────────────
+function invTaxaMensalEquiv(taxaAnual) { return Math.pow(1 + taxaAnual, 1 / 12) - 1; }
+
+function invAliquotaIR(prazoDias) {
+    if (prazoDias <= 180) return 0.225;
+    if (prazoDias <= 360) return 0.20;
+    if (prazoDias <= 720) return 0.175;
+    return 0.15;
+}
+
+// Juros compostos com aportes mensais (aporte ao fim de cada mês)
+function invSimular({ valorInicial, aporteMensal, prazoMeses, taxaMensal, isento }) {
+    let saldo = valorInicial, investido = valorInicial;
+    const serieSaldo = [valorInicial], serieInvestido = [valorInicial];
+    for (let m = 1; m <= prazoMeses; m++) {
+        saldo = saldo * (1 + taxaMensal) + aporteMensal;
+        investido += aporteMensal;
+        serieSaldo.push(saldo);
+        serieInvestido.push(investido);
+    }
+    const rendimentoBruto = saldo - investido;
+    const aliq = isento ? 0 : invAliquotaIR(prazoMeses * 30);
+    const ir = rendimentoBruto > 0 ? rendimentoBruto * aliq : 0;
+    const liquido = saldo - ir;
+    return {
+        totalInvestido: investido, montanteBruto: saldo, rendimentoBruto, ir, liquido, aliquotaIR: aliq,
+        rentabPct: investido > 0 ? (liquido - investido) / investido : 0,
+        serieSaldo, serieInvestido
+    };
+}
+
+// ── Produtos (presets) ────────────────────────────────────
+function invProdutos() {
+    const cfg = appData.investimentos.config;
+    return {
+        poupanca: { nome: 'Poupança', isento: true,  taxaAnual: Math.pow(1 + cfg.poupancaMensal, 12) - 1, cor: '#10b981' },
+        cdb:      { nome: 'CDB',       isento: false, taxaAnual: cfg.cdiAnual,                              cor: '#6366f1' }
+    };
+}
+
+function invGetParams() {
+    const tipo = document.getElementById('invTipo').value;
+    const prod = invProdutos()[tipo];
+    return {
+        tipo, nomeProduto: prod.nome, isento: prod.isento, cor: prod.cor,
+        taxaAnual:    (parseFloat(document.getElementById('invTaxa').value) || 0) / 100,
+        valorInicial:  parseFloat(document.getElementById('invValorInicial').value) || 0,
+        aporteMensal:  parseFloat(document.getElementById('invAporte').value) || 0,
+        prazoMeses:    parseInt(document.getElementById('invPrazo').value) || 12
+    };
+}
+
+function invOnTipoChange() {
+    const prod = invProdutos()[document.getElementById('invTipo').value];
+    document.getElementById('invTaxa').value = (prod.taxaAnual * 100).toFixed(2);
+    document.getElementById('invTaxaHint').textContent = prod.isento ? '(isento de IR)' : '(IR regressivo)';
+    invOnInput();
+}
+
+function invSetPrazo(meses) { document.getElementById('invPrazo').value = meses; invOnInput(); }
+
+function invOnInput() {
+    const meses = parseInt(document.getElementById('invPrazo').value) || 12;
+    let label = meses + ' meses';
+    if (meses % 12 === 0) { const a = meses / 12; label += ` (${a} ${a === 1 ? 'ano' : 'anos'})`; }
+    document.getElementById('invPrazoLabel').textContent = label;
+    invRenderResultado();
+}
+
+// ── Integração com o módulo Contas ────────────────────────
+function invSobraEstimada() {
+    const renda = (typeof RENDA_MENSAL === 'number') ? RENDA_MENSAL : 0;
+    const fixas = (typeof TOTAL_FIXED  === 'number') ? TOTAL_FIXED  : 0;
+    const s = renda - fixas;
+    return s > 0 ? s : 0;
+}
+function invUsarSobra() {
+    const s = invSobraEstimada();
+    if (s > 0) { document.getElementById('invAporte').value = s.toFixed(2); invOnInput(); }
+}
+function invAtualizarSobraBtn() {
+    const btn = document.getElementById('invSobraBtn');
+    const s = invSobraEstimada();
+    if (s > 0) { btn.textContent = `💡 Usar sobra do mês (${formatCurrency(s)})`; btn.classList.remove('hidden'); }
+    else btn.classList.add('hidden');
+}
+
+// ── Render: simulador ─────────────────────────────────────
+function invRenderResultado() {
+    const p = invGetParams();
+    const r = invSimular({ valorInicial: p.valorInicial, aporteMensal: p.aporteMensal, prazoMeses: p.prazoMeses, taxaMensal: invTaxaMensalEquiv(p.taxaAnual), isento: p.isento });
+    const cards = [
+        { label: 'Total investido',  val: formatCurrency(r.totalInvestido),  cor: 'border-gray-400' },
+        { label: 'Rendimento bruto', val: formatCurrency(r.rendimentoBruto), cor: 'border-emerald-500' },
+        { label: p.isento ? 'IR (isento)' : `IR (${(r.aliquotaIR * 100).toFixed(1)}%)`, val: r.ir > 0 ? formatCurrency(-r.ir) : formatCurrency(0), cor: 'border-red-400' },
+        { label: 'Valor líquido',    val: formatCurrency(r.liquido),         cor: 'border-indigo-500' }
+    ];
+    document.getElementById('invResultCards').innerHTML = cards.map(c =>
+        `<div class="bg-white p-3 rounded-lg shadow-sm border-l-4 ${c.cor}">
+            <p class="text-xs text-gray-500">${esc(c.label)}</p>
+            <p class="text-sm font-bold text-gray-800 mt-0.5" style="color:inherit">${esc(c.val)}</p>
+        </div>`).join('');
+    document.getElementById('invTaxaInfo').textContent =
+        `Rentabilidade líquida no período: ${(r.rentabPct * 100).toFixed(1)}% · taxa equivalente ${(invTaxaMensalEquiv(p.taxaAnual) * 100).toFixed(3)}% a.m.`;
+    invDrawChart(r, p);
+}
+
+function _invChartTheme() {
+    const dark = document.documentElement.classList.contains('dark');
+    return { dark, grid: dark ? 'rgba(148,163,184,0.15)' : 'rgba(0,0,0,0.06)', txt: dark ? '#94a3b8' : '#64748b' };
+}
+
+function invDrawChart(r, p) {
+    const ctx = document.getElementById('invChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    const t = _invChartTheme();
+    if (invChart) invChart.destroy();
+    invChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: r.serieSaldo.map((_, i) => i), datasets: [
+            { label: 'Saldo', data: r.serieSaldo, borderColor: p.cor, backgroundColor: p.cor + '22', fill: true, tension: 0.25, pointRadius: 0, borderWidth: 2 },
+            { label: 'Investido', data: r.serieInvestido, borderColor: t.txt, borderDash: [5, 4], fill: false, pointRadius: 0, borderWidth: 1.5 }
+        ] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: t.txt, boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: c => c.dataset.label + ': ' + formatCurrency(c.parsed.y) } }
+            },
+            scales: {
+                x: { title: { display: true, text: 'Meses', color: t.txt }, grid: { color: t.grid }, ticks: { color: t.txt, maxTicksLimit: 12 } },
+                y: { grid: { color: t.grid }, ticks: { color: t.txt, callback: v => 'R$ ' + (v / 1000).toFixed(0) + 'k' } }
+            }
+        }
+    });
+}
+
+// ── Render: comparar Poupança × CDB ───────────────────────
+function invRenderComparar() {
+    const p = invGetParams();
+    const prods = invProdutos();
+    const rows = Object.keys(prods).map(k => {
+        const prod = prods[k];
+        const r = invSimular({ valorInicial: p.valorInicial, aporteMensal: p.aporteMensal, prazoMeses: p.prazoMeses, taxaMensal: invTaxaMensalEquiv(prod.taxaAnual), isento: prod.isento });
+        return { prod, r };
+    });
+    const best = rows.reduce((a, b) => b.r.liquido > a.r.liquido ? b : a);
+    const other = rows.find(x => x.prod !== best.prod);
+    const diff = other ? best.r.liquido - other.r.liquido : 0;
+    document.getElementById('invComparTable').innerHTML = `
+        <p class="text-xs text-gray-400 mb-2">Inicial ${formatCurrency(p.valorInicial)} · aporte ${formatCurrency(p.aporteMensal)}/mês · ${p.prazoMeses} meses</p>
+        <table class="w-full text-sm">
+            <thead><tr class="text-left text-gray-500 border-b border-gray-200">
+                <th class="py-2">Produto</th><th class="py-2 text-right">Líquido</th><th class="py-2 text-right">Rend.</th>
+            </tr></thead>
+            <tbody>${rows.map(({ prod, r }) => `
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium" style="color:${prod.cor}">${esc(prod.nome)}${prod === best.prod ? ' 🏆' : ''}</td>
+                    <td class="py-2 text-right font-semibold text-gray-800" style="color:inherit">${formatCurrency(r.liquido)}</td>
+                    <td class="py-2 text-right text-emerald-600">${(r.rentabPct * 100).toFixed(1)}%</td>
+                </tr>`).join('')}</tbody>
+        </table>
+        ${diff > 0 ? `<p class="text-xs text-gray-500 mt-3">💡 <strong>${esc(best.prod.nome)}</strong> rende ${formatCurrency(diff)} a mais nesse cenário.</p>` : ''}`;
+    const ctx = document.getElementById('invComparChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    const t = _invChartTheme();
+    if (invComparChart) invComparChart.destroy();
+    invComparChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: rows.map(x => x.prod.nome), datasets: [{ label: 'Líquido', data: rows.map(x => x.r.liquido), backgroundColor: rows.map(x => x.prod.cor) }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => formatCurrency(c.parsed.y) } } },
+            scales: { x: { ticks: { color: t.txt }, grid: { display: false } }, y: { ticks: { color: t.txt, callback: v => 'R$ ' + (v / 1000).toFixed(0) + 'k' }, grid: { color: t.grid } } }
+        }
+    });
+}
+
+// ── Cenários salvos ───────────────────────────────────────
+function invSalvarCenario() {
+    const p = invGetParams();
+    const r = invSimular({ valorInicial: p.valorInicial, aporteMensal: p.aporteMensal, prazoMeses: p.prazoMeses, taxaMensal: invTaxaMensalEquiv(p.taxaAnual), isento: p.isento });
+    const nome = (prompt('Nome do cenário:', `${p.nomeProduto} ${(p.taxaAnual * 100).toFixed(1)}% · ${p.prazoMeses}m`) || '').trim();
+    if (!nome) return;
+    appData.investimentos.cenarios.push({
+        id: Date.now(), nome, tipo: p.tipo,
+        params: { valorInicial: p.valorInicial, aporteMensal: p.aporteMensal, prazoMeses: p.prazoMeses, taxaAnual: p.taxaAnual },
+        resultado: { totalInvestido: r.totalInvestido, liquido: r.liquido, rendimentoBruto: r.rendimentoBruto, ir: r.ir }
+    });
+    salvarDados();
+    toast('Cenário salvo 💾', 'success');
+    invRenderCenarios();
+}
+
+function invExcluirCenario(id) {
+    showConfirm('Excluir este cenário?', () => {
+        appData.investimentos.cenarios = appData.investimentos.cenarios.filter(c => c.id !== id);
+        salvarDados();
+        invRenderCenarios();
+        toast('Cenário excluído', 'info');
+    });
+}
+
+function invRenderCenarios() {
+    const list = appData.investimentos.cenarios || [];
+    const el = document.getElementById('invCenariosList');
+    if (!el) return;
+    if (!list.length) {
+        el.innerHTML = `<p class="text-sm text-gray-400 text-center py-6">Nenhum cenário salvo ainda.<br>Use o simulador e toque em "Salvar cenário".</p>`;
+        return;
+    }
+    el.innerHTML = list.slice().reverse().map(c => {
+        const prod = invProdutos()[c.tipo];
+        return `<div class="border border-gray-200 rounded-lg p-3 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+                <p class="text-sm font-semibold text-gray-800 truncate" style="color:inherit">${esc(c.nome)}</p>
+                <p class="text-xs text-gray-400">${formatCurrency(c.params.valorInicial)} + ${formatCurrency(c.params.aporteMensal)}/mês · ${c.params.prazoMeses}m</p>
+            </div>
+            <div class="text-right flex-shrink-0">
+                <p class="text-sm font-bold" style="color:${prod ? prod.cor : '#6366f1'}">${formatCurrency(c.resultado.liquido)}</p>
+                <button onclick="invExcluirCenario(${c.id})" class="text-xs text-gray-300 hover:text-red-500">excluir</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function invRenderAll() {
+    invAtualizarSobraBtn();
+    invRenderResultado();
+    invRenderComparar();
+    invRenderCenarios();
+}
+
+function initInvestimentos() {
+    ['invValorInicial', 'invAporte', 'invTaxa'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', invOnInput);
+    });
+    invOnTipoChange();
+    invRenderCenarios();
+}
+
 inicializar();
+initInvestimentos();
 </script>
 
 <!-- ── INSTALL BANNER ─────────────────────────────────── -->
@@ -3227,7 +3648,7 @@ inicializar();
 
 <!-- ── BOTTOM NAV ─────────────────────────────────────── -->
 <nav id="mobileNav" role="navigation" aria-label="Navegação principal">
-    <div class="nav-inner">
+    <div class="nav-inner" id="navInnerContas">
         <button class="nav-item nav-active" id="navInicio" onclick="navTo('inicio')" aria-label="Início">
             <span class="nav-icon">🏠</span>
             <span>Início</span>
@@ -3244,6 +3665,24 @@ inicializar();
             <span>Dados</span>
         </button>
         <button class="nav-item" id="navMais" onclick="abrirMaisSheet()" aria-label="Mais opções">
+            <span class="nav-icon">⋯</span>
+            <span>Mais</span>
+        </button>
+    </div>
+    <div class="nav-inner" id="navInnerInvestir">
+        <button class="nav-item nav-active" id="invNavSimular" onclick="navToInv('simular')" aria-label="Simular">
+            <span class="nav-icon">📈</span>
+            <span>Simular</span>
+        </button>
+        <button class="nav-item" id="invNavComparar" onclick="navToInv('comparar')" aria-label="Comparar">
+            <span class="nav-icon">⚖️</span>
+            <span>Comparar</span>
+        </button>
+        <button class="nav-item" id="invNavCenarios" onclick="navToInv('cenarios')" aria-label="Cenários">
+            <span class="nav-icon">💼</span>
+            <span>Cenários</span>
+        </button>
+        <button class="nav-item" onclick="abrirMaisSheet()" aria-label="Mais opções">
             <span class="nav-icon">⋯</span>
             <span>Mais</span>
         </button>
