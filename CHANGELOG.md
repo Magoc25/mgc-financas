@@ -5,6 +5,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.5.0] — Junho 2026
+
+### 🆕 Adicionado
+- **Módulo de Investimentos (MVP — Fase 1)** — nova aba dedicada à simulação de renda fixa
+  - Navegação em duas abas no topo: **Contas** ↔ **Investir** (cada contexto com sua própria bottom-nav)
+  - Simulador com aporte inicial, aporte mensal, prazo e taxa (Poupança e CDB prefixado)
+  - Motor de cálculo de juros compostos com capitalização mensal e IR regressivo (funções puras)
+  - Gráfico de evolução do saldo ao longo do tempo (Chart.js)
+  - Salvar cenários e comparar **Poupança × CDB** no mesmo cenário
+  - Integração: sugere a "sobra do mês" (renda − despesas fixas) como aporte mensal
+
+---
+
 ## [4.4.0] — Junho 2026
 
 ### 🆕 Adicionado
