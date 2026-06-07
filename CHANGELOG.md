@@ -5,6 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.9.0] — Junho 2026
+
+### 🆕 Adicionado
+- **Modo privacidade (ocultar valores)** — botão de olho ao lado do seletor Contas/Investir que mascara todos os valores como `R$ ••••` e borra os gráficos da aba. **Independente por aba** (ex.: ocultar em Contas e mostrar em Investir) e **salvo no dispositivo**. Ideal para mostrar o app a outras pessoas sem expor seus dados financeiros.
+
+---
+
 ## [4.8.0] — Junho 2026
 
 ### 🆕 Adicionado

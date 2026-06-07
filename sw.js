@@ -1,4 +1,4 @@
-const CACHE = 'mgc-v13';
+const CACHE = 'mgc-v14';
 const SHELL = ['./mgc-financas.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
