@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.7.0] — Junho 2026
+
+### 🆕 Adicionado
+- **Investimentos — Fase 3 (educacional)**: nova aba **Aprender** no módulo de investimentos
+  - **Glossário** de renda fixa (CDI, Selic, IPCA, prefixado × pós-fixado, IR regressivo, Poupança, CDB, LCI/LCA, Tesouro Direto, FGC, liquidez)
+  - **Cenários prontos** que pré-preenchem o simulador: reserva de emergência, médio prazo e longo prazo
+  - **Ícones de ajuda ⓘ** ao lado de "Produto" e "Taxa" no simulador
+
+---
+
 ## [4.6.0] — Junho 2026
 
 ### 🆕 Adicionado
