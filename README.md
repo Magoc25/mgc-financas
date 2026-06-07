@@ -8,9 +8,29 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 [![Versão](https://img.shields.io/badge/versão-4.8.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
-[![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#instalar-como-app-no-celular)
+[![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
 [![Dispositivos ativos](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/Magoc25/mgc-financas/main/stats.json&query=$.active_30d&label=dispositivos%20ativos%20(30d)&color=blue&suffix=%20dispositivos)](./stats.json)
+
+---
+
+## ▶ Abrir agora — sem baixar nada
+
+O app já está publicado online. Clique e use:
+
+**[▶ Abrir o MGC Finanças](https://magoc25.github.io/mgc-financas/)**
+
+Funciona em qualquer navegador moderno (Chrome, Edge, Firefox, Safari) — no celular, tablet ou computador. **Não precisa de cadastro, login, conta GitHub ou download de arquivos.** Após o primeiro acesso, o app funciona **offline**. Seus dados ficam **somente no seu dispositivo** (no armazenamento do próprio navegador).
+
+### 📱 Instalar como app no seu dispositivo
+
+Depois de abrir a URL acima, você pode instalar como aplicativo nativo, com ícone na tela inicial / área de trabalho:
+
+| Plataforma | Como instalar |
+|---|---|
+| **Chrome / Edge no PC** | Clique no ícone de instalação (☐ com seta) na barra de endereços → Instalar |
+| **Android (Chrome)** | Menu (⋮) → "Instalar app" ou "Adicionar à tela inicial" |
+| **iPhone / iPad (Safari)** | Compartilhar (□↑) → "Adicionar à Tela de Início" |
 
 ---
 
@@ -23,7 +43,7 @@ Se você está avaliando este app, provavelmente já viu opções na Play Store 
 - **Sem prazo de expiração** — muitos apps oferecem período de teste e depois bloqueiam funcionalidades ou cobram assinatura. Este é gratuito para sempre, sem limitações.
 - **Funciona sem internet** — abre e funciona normalmente mesmo sem conexão. Sincroniza quando a internet voltar, se você quiser.
 - **Sem cadastro em lugar nenhum — nem para sincronizar** — muitos apps financeiros "gratuitos" exigem e-mail ou conta mesmo para o uso básico. O MGC Finanças abre direto no navegador, sem cadastro, sem login, sem verificação — e sincroniza entre dispositivos usando o seu próprio banco de dados Supabase, não o de uma empresa terceira.
-- **Feito para finanças brasileiras** — apps internacionais ignoram (ou cobram em planos premium) funcionalidades a mais. O MGC Finanças foi construído com essas categorias desde o início.
+- **Finanças + investimentos juntos** — além do controle de despesas mês a mês, tem um módulo de **simulação de renda fixa** (Poupança, CDB, LCI/LCA, Tesouro) com foco em educação financeira.
 
 O único "custo" honesto: a instalação é um pouco mais manual do que clicar em "Instalar" na loja — mas você faz uma única vez e leva menos de 5 minutos.
 
@@ -31,24 +51,21 @@ O único "custo" honesto: a instalação é um pouco mais manual do que clicar e
 
 ## 📂 O que são todos esses arquivos?
 
-Se você veio aqui só para **usar o app**, pode ignorar a grande maioria dos arquivos deste repositório — eles são documentação técnica e configuração voltadas para desenvolvedores.
+Se você veio aqui só para **usar o app**, pode ignorar a grande maioria dos arquivos deste repositório — eles são documentação técnica e configuração voltadas para o desenvolvedor.
 
-Para você, o que importa é simples:
+Para você, basta clicar na URL pública da seção [▶ Abrir agora](#-abrir-agora--sem-baixar-nada). Tudo o que importa é:
 
-| Cenário | O que você precisa |
+| Arquivo principal | URL para usar |
 |---|---|
-| **Usar no computador** (sem nuvem) | Baixar apenas `mgc-financas.html` e abrir no navegador |
-| **Acessar por URL em qualquer dispositivo** | Criar uma conta no GitHub, fazer upload dos arquivos deste repositório uma única vez — depois acessa de qualquer lugar pela URL, sem guardar nada no computador |
-
-👉 Vá direto para [**Como usar**](#-como-usar--3-cenários) para o passo a passo do seu cenário.
+| `mgc-financas.html` | [magoc25.github.io/mgc-financas](https://magoc25.github.io/mgc-financas/) |
 
 ---
 
 ## ✨ O que é
 
-O MGC Finanças é um **arquivo HTML único** que roda direto no navegador — Chrome, Edge, Firefox ou Safari. Não precisa instalar nada, não precisa de servidor e funciona offline. Seus dados ficam no próprio computador.
+O MGC Finanças é um **arquivo HTML único** que roda direto no navegador — Chrome, Edge, Firefox ou Safari. Não precisa instalar nada, não precisa de servidor e funciona offline. Seus dados ficam no próprio dispositivo.
 
-Quando quiser sincronizar entre computadores ou acessar pelo celular, basta configurar o Supabase (gratuito) e opcionalmente o GitHub Pages.
+Quando quiser sincronizar entre computadores ou acessar pelo celular, basta configurar o Supabase (gratuito) — opcional.
 
 ---
 
@@ -78,6 +95,13 @@ Quando quiser sincronizar entre computadores ou acessar pelo celular, basta conf
 - Gráfico de **linha** — evolução do saldo ao longo dos meses
 - Modo claro e escuro nos gráficos
 
+### 📈 Investimentos (renda fixa)
+- **Simulador** de Poupança, CDB, LCI/LCA, Tesouro Selic e Tesouro IPCA+ com juros compostos, aportes mensais e **IR regressivo**
+- **Taxas de referência editáveis** (CDI, Selic, IPCA) e cálculo da rentabilidade **real** (descontando a inflação)
+- **Comparador** dos produtos lado a lado (tabela + gráfico de barras)
+- **Aprender** — glossário de renda fixa e cenários prontos
+- **Meta** — calcula quanto poupar por mês para um objetivo; **exportação CSV** dos cenários
+
 ### Segurança e Histórico
 - **PIN de acesso** — proteja o dashboard com senha de 4 dígitos
 - **Histórico de alterações** — registro das últimas 150 ações (adição, edição, remoção, duplicação)
@@ -96,7 +120,7 @@ Quando quiser sincronizar entre computadores ou acessar pelo celular, basta conf
 - Toast de notificações para ações do usuário
 
 ### Mobile (PWA)
-- **Bottom Navigation Bar** — abas fixas na base (Início, Gráficos, Dados)
+- **Duas abas no topo** (Contas e Investir), cada uma com sua barra de navegação inferior
 - **FAB flutuante (＋)** — novo lançamento com um toque, sempre visível
 - **Bottom sheets** — formulário de entrada e menu de mais opções deslizantes
 - **Instalável** como app no Android, iOS e desktop
@@ -108,137 +132,31 @@ Quando quiser sincronizar entre computadores ou acessar pelo celular, basta conf
 
 ---
 
-## 📦 Como usar — 3 cenários
+## 📦 Como usar
 
-### Cenário 1 — Uso local simples _(sem nuvem)_
+### Opção 1 — Online _(recomendado)_
 
-**Ideal para:** usuário de um único computador que não precisa de acesso remoto.
+Use a URL pública da seção [▶ Abrir agora](#-abrir-agora--sem-baixar-nada). É a forma mais simples — sem instalação, sem cadastro, sem download. Funciona em qualquer dispositivo com navegador.
 
-```
-┌─────────────────────────────┐
-│  Seu computador             │
-│  ┌───────────────────────┐  │
-│  │   mgc-financas.html   │  │
-│  │    + localStorage     │  │
-│  └───────────────────────┘  │
-│   Dados ficam no navegador  │
-└─────────────────────────────┘
-```
+Seus dados ficam salvos **no próprio navegador**, apenas no seu dispositivo. Para fazer backup ou levar para outro computador, exporte pelo botão **💾 Exportar Backup** dentro do app.
 
-**Passos:**
-1. Baixe `mgc-financas.html`, `sw.js`, `manifest.json`, `icon-192.png` e `icon-512.png` para a mesma pasta
-2. Abra o `mgc-financas.html` no Chrome ou Edge
-3. Pronto — use normalmente
+### Opção 2 — Cópia local _(opcional)_
 
-**Backup:** clique em 💾 Exportar Backup regularmente e guarde o arquivo.
+Se quiser uma cópia totalmente independente — útil para arquivamento ou para usar sem conexão garantida:
+
+1. No repositório, clique no botão verde **Code** → **Download ZIP**
+2. Extraia o ZIP em uma pasta no seu computador
+3. Dê duplo clique em `mgc-financas.html`
+
+Funciona exatamente igual à versão online, mas sem nenhuma dependência da internet ou do GitHub.
+
+### Opção 3 — Sincronizar entre dois ou mais dispositivos _(opcional)_
+
+Se quiser que os dados apareçam tanto no PC quanto no celular automaticamente, configure uma conta gratuita no Supabase (instruções em [Configurar Supabase](#-configurar-supabase-opcional)). É opcional — você pode usar o app perfeitamente sem isso.
 
 ---
 
-### Cenário 2 — Dois computadores com sincronização _(Supabase, sem GitHub)_
-
-**Ideal para:** quem usa o dashboard em 2 ou mais PCs e quer dados sempre atualizados.
-
-```
-┌──────────────┐    ☁️ Supabase    ┌──────────────┐
-│   PC Casa    │ ◄──────────────► │  PC Trabalho │
-│  .html local │    (privado)     │  .html local │
-└──────────────┘                  └──────────────┘
-```
-
-**Passos:**
-1. Crie conta no Supabase (gratuito) — veja [Configurar Supabase](#configurar-supabase)
-2. Copie os arquivos para cada computador (pendrive, e-mail, etc.)
-3. Em cada PC, clique em ☁️ → configure as chaves → Salvar e sincronizar
-4. Os dados sincronizam automaticamente entre os PCs
-
----
-
-### Cenário 3 — Acesso de qualquer lugar pela URL _(Supabase + GitHub Pages)_
-
-**Ideal para:** quem quer abrir o dashboard pelo celular, tablet ou qualquer computador sem precisar do arquivo.
-
-```
-             ☁️ Supabase (dados)
-                    ▲
-                    │
- 🌐 GitHub Pages ───┤
- https://magoc25.github.io/mgc-financas/
-                    │
-      ┌─────────────┼─────────────┐
-   💻 PC         📱 Celular    💻 Mac
-```
-
-**Passos:**
-1. Configure o Supabase (Cenário 2)
-2. Ative o GitHub Pages — veja [Configurar GitHub Pages](#configurar-github-pages)
-3. Acesse pela URL em qualquer dispositivo
-4. Em cada dispositivo, configure as chaves Supabase uma única vez
-
-> ⚠️ **Nota sobre repositório público:** o arquivo HTML não contém seus dados nem suas chaves. As chaves ficam salvas no `localStorage` do navegador. Um repositório público expõe apenas o código — seus lançamentos e credenciais são privados.
-
----
-
-## 🪜 Evolua no seu ritmo
-
-### Nível 1 — Só o arquivo no navegador _(zero configuração)_
-
-**Como começar:** baixe os arquivos e abra `mgc-financas.html` no Chrome ou Edge. É só isso.
-
-| ✅ O que você tem | ❌ O que ainda não tem |
-|---|---|
-| Dashboard completo com todos os recursos | Acesso pelo celular ou outros computadores |
-| Gráficos e análise financeira | Sincronização automática entre dispositivos |
-| PIN de segurança e histórico | Instalação como app (requer HTTPS) |
-| Backup local (exportar/importar JSON) | — |
-
-**Quando avançar para o Nível 2?** Quando quiser acessar o dashboard pelo celular ou em outro computador.
-
----
-
-### Nível 2 — Supabase + GitHub Pages _(app no celular, sync automático)_
-
-**O que muda:** seus dados vão para a nuvem (Supabase) e o dashboard fica acessível por uma URL pública do GitHub Pages — de qualquer dispositivo, a qualquer hora.
-
-> 🔒 **Sua agenda financeira não fica visível para ninguém.** A URL pública abre o dashboard vazio para qualquer pessoa que acessar. Seus lançamentos e configurações ficam no `localStorage` do seu navegador e nas suas chaves privadas do Supabase.
-
-| ✅ O que você ganha |
-|---|
-| URL permanente acessível de qualquer lugar |
-| Sync automático entre todos os dispositivos |
-| App instalável no celular (Android e iOS) e no desktop |
-| Atualizações automáticas ao atualizar o arquivo no GitHub |
-
-#### Instalar como app no celular
-
-Após configurar o GitHub Pages e acessar a URL pelo celular:
-
-**Android (Chrome):**
-1. Abra a URL no Chrome
-2. O banner de instalação aparece automaticamente após alguns segundos
-3. Toque em **Instalar** — ou use Menu (⋮) → **Adicionar à tela inicial**
-
-**iPhone / iPad (Safari):**
-1. Abra a URL no Safari *(não funciona no Chrome no iOS)*
-2. Toque no botão **Compartilhar** (ícone de seta para cima)
-3. Role para baixo → **Adicionar à tela de início**
-4. Confirme — o app aparece na tela inicial
-
-**Desktop (Chrome / Edge):**
-1. Abra a URL no Chrome ou Edge
-2. Aguarde 2–3 segundos — ícone de instalação aparece na barra de endereço
-3. Clique no ícone e confirme a instalação
-
-**macOS (Safari — Ventura 13+ ou Sonoma):**
-1. Abra a URL no Safari
-2. Menu **Arquivo** → **Adicionar ao Dock**
-
-> 💡 Após instalar, o app abre em tela cheia, sem barra de endereços, como um aplicativo nativo.
-
----
-
-## 🔧 Guias de Configuração
-
-### Configurar Supabase
+## 🔧 Configurar Supabase _(opcional — só para sincronizar entre dispositivos)_
 
 #### 1. Criar conta e projeto
 1. Acesse [supabase.com](https://supabase.com) → **Start your project**
@@ -297,39 +215,6 @@ SELECT cron.schedule(
 
 ---
 
-### Configurar GitHub Pages
-
-#### 1. Criar repositório
-1. Acesse [github.com](https://github.com) → **+** → **New repository**
-2. Nome: `mgc-financas`
-3. Visibilidade: **Public** (necessário para GitHub Pages gratuito)
-4. **Não** marque "Add a README file" — deixe o repo vazio
-5. Clique em **Create repository**
-
-#### 2. Enviar os arquivos
-No terminal (ou usando o Git):
-```bash
-git init
-git add mgc-financas.html manifest.json sw.js icon-192.png icon-512.png index.html
-git commit -m "feat: MGC Finanças"
-git branch -M main
-git remote add origin https://github.com/seunome/mgc-financas.git
-git push -u origin main
-```
-
-#### 3. Ativar GitHub Pages
-1. No repositório → **Settings → Pages**
-2. Source: **Deploy from a branch**
-3. Branch: **main** · Pasta: **/ (root)**
-4. Clique em **Save** → aguarde ~2 min
-
-#### 4. Sua URL
-```
-https://seunome.github.io/mgc-financas/
-```
-
----
-
 ## 🗂️ Estrutura dos arquivos
 
 | Arquivo | Função |
@@ -354,19 +239,11 @@ https://seunome.github.io/mgc-financas/
 ### "A Publishable key do Supabase é segura para usar?"
 **Sim.** Ela foi projetada para ficar exposta no navegador. A segurança real é garantida pelas **Row Level Security policies** do Supabase. A Secret key (que nunca usamos) é a que não deve ser exposta.
 
-### "E se alguém acessar a URL do meu GitHub Pages?"
+### "E se alguém acessar a URL pública do app?"
 A pessoa verá o dashboard vazio, sem nenhum dado. Para ver seus dados, precisaria também das suas chaves do Supabase — que não estão em nenhum lugar público.
 
 ### "O que acontece se eu fechar a conta do Supabase?"
 Você perde a sincronização em nuvem, mas seus dados continuam locais no `localStorage`. Faça backup JSON regularmente.
-
-### Recomendação por cenário
-
-| Cenário | Nível de segurança | Recomendação |
-|---|---|---|
-| Só arquivo local | 🟢 Máximo | Ideal para dados sensíveis |
-| Local + Supabase | 🟢 Alto | Padrão recomendado |
-| GitHub Pages Public | 🟡 Bom | Código exposto, dados não |
 
 ---
 
@@ -374,7 +251,7 @@ Você perde a sincronização em nuvem, mas seus dados continuam locais no `loca
 
 Faça backup mensalmente: **💾 Exportar Backup → JSON**
 
-O arquivo JSON inclui: lançamentos, dívidas, faturas, categorias, cartões, orçamentos e configurações.
+O arquivo JSON inclui: lançamentos, dívidas, faturas, categorias, cartões, orçamentos, cenários de investimento e configurações.
 
 Para restaurar: **📂 Importar Backup → selecione o arquivo JSON**
 
