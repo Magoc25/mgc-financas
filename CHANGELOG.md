@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.9.2] — Junho 2026
+
+### 🔧 Melhorado
+- **Avaliações:** contador de caracteres no campo de comentário (ex.: 31/200)
+
+### 🔒 Segurança
+- **Limite das avaliações reforçado:** comentário ≤ 200 e nome ≤ 40 (formulário + constraint no backend reduzida de 1000/60), reduzindo abuso/spam no Supabase compartilhado
+
+---
+
 ## [4.9.1] — Junho 2026
 
 ### 🔧 Melhorado

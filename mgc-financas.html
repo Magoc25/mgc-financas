@@ -1211,7 +1211,8 @@ on conflict (id) do nothing;</div>
                 </div>
                 <div>
                     <label class="text-sm text-gray-600 block mb-1">Comentário (opcional)</label>
-                    <textarea id="reviewCommentInput" rows="2" maxlength="200" placeholder="O que você achou do app?" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"></textarea>
+                    <textarea id="reviewCommentInput" rows="2" maxlength="200" oninput="updateRevCharCount()" placeholder="O que você achou do app?" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"></textarea>
+                    <p id="reviewCharCount" class="text-xs text-gray-400 text-right mt-1">0/200</p>
                 </div>
                 <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
                     <input type="checkbox" id="reviewDonatedCheck" checked> Já apoiei via PIX ☕
@@ -1317,8 +1318,8 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.9.1'; // atualizado por update-version.sh
-const LOCAL_VERSION  = '4.9.1'; // bumpar a cada release junto com APP_VERSION
+const APP_VERSION    = '4.9.2'; // atualizado por update-version.sh
+const LOCAL_VERSION  = '4.9.2'; // bumpar a cada release junto com APP_VERSION
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -3293,10 +3294,12 @@ async function openReviewsModal(mode = 'list') {
         setReviewStar(0);
         document.getElementById('reviewNameInput').value = '';
         document.getElementById('reviewCommentInput').value = '';
+        updateRevCharCount();
         document.getElementById('reviewDonatedCheck').checked = true;
     }
 }
 function closeReviewsModal() { document.getElementById('reviewsModal').classList.add('hidden'); }
+function updateRevCharCount() { const el = document.getElementById('reviewCommentInput'); const c = document.getElementById('reviewCharCount'); if (el && c) c.textContent = el.value.length + '/200'; }
 
 function setReviewStar(n) {
     document.getElementById('reviewStarInput').value = n;
