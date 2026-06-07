@@ -1,6 +1,6 @@
 # Termos de Uso — MGC Finanças
 
-**Versão:** 4.4.0 · **Data:** Maio de 2026
+**Versão:** 4.9.1 · **Data:** Junho de 2026
 **Desenvolvedor:** Marlon Gomes da Costa (MGC Dev) · marlongc25@protonmail.com
 
 ---
@@ -69,6 +69,8 @@ O autor não se responsabiliza por:
 - Danos diretos ou indiretos decorrentes do uso do software
 
 O app é uma ferramenta de organização pessoal — não substitui consultoria financeira profissional.
+
+**Simulações de investimento:** o módulo de Investimentos é uma ferramenta **educacional**. As simulações são **estimativas** baseadas em premissas e taxas informadas pelo usuário, com modelo simplificado (não consideram marcação a mercado, variação de índices, custos da instituição ou mudanças na tributação). **Não representam garantia de rendimento** nem **constituem recomendação ou consultoria de investimento** — decisões de investimento são de responsabilidade exclusiva do usuário.
 
 ---
 

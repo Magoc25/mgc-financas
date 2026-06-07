@@ -1,6 +1,6 @@
 # Inventário de Tratamento de Dados — MGC Finanças
 
-**Agente:** Marlon Gomes da Costa · **Porte:** ATPP · **Atualizado em:** Maio de 2026
+**Agente:** Marlon Gomes da Costa · **Porte:** ATPP · **Atualizado em:** Junho de 2026
 
 > Documento elaborado conforme [LGPD Art. 37](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm#art37) e [Resolução CD/ANPD nº 2/2022, Art. 7º](https://www.gov.br/anpd/pt-br/acesso-a-informacao/institucional/atos-normativos/regulamentacoes_anpd/resolucao-cd-anpd-no-2-de-27-de-janeiro-de-2022) (simplificado para ATPP).
 
@@ -35,6 +35,7 @@ O MGC Finanças opera em três camadas. **Este inventário cobre apenas o tratam
 Os itens abaixo ficam **exclusivamente** no dispositivo/infraestrutura do usuário e **nunca chegam** ao desenvolvedor:
 
 - Dados financeiros (rendas, faturas, despesas fixas, dívidas, metas)
+- Cenários e simulações de investimento (renda fixa)
 - Histórico de transações
 - Chaves de acesso ao Supabase do usuário
 - Pagamentos e controle de status

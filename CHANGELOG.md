@@ -5,6 +5,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.9.1] — Junho 2026
+
+### 🔧 Melhorado
+- SQL de configuração do Supabase agora inclui os `GRANT`s explícitos (anon/authenticated/service_role), evitando o erro `42501` em projetos Supabase criados recentemente
+- README: "Como usar — Opção 2 (cópia local)" simplificado para baixar apenas o `mgc-financas.html`
+
+### 📄 Documentação legal
+- `TERMS.md`: ressalva sobre o simulador de investimentos (estimativas educacionais, sem garantia de rendimento, não é recomendação) + versão/data atualizadas
+- `DATA_INVENTORY.md` e `PRIVACY.md`: incluem os cenários de investimento e datas atualizadas
+
+---
+
 ## [4.9.0] — Junho 2026
 
 ### 🆕 Adicionado

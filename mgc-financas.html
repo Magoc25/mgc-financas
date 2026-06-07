@@ -474,6 +474,9 @@
   payload jsonb not null default '{}',
   updated_at timestamptz default now()
 );
+grant select, insert, update, delete on finance_data to anon;
+grant select, insert, update, delete on finance_data to authenticated;
+grant select, insert, update, delete on finance_data to service_role;
 alter table finance_data enable row level security;
 create policy "public_access" on finance_data
   for all using (true) with check (true);
@@ -1314,8 +1317,8 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.9.0'; // atualizado por update-version.sh
-const LOCAL_VERSION  = '4.9.0'; // bumpar a cada release junto com APP_VERSION
+const APP_VERSION    = '4.9.1'; // atualizado por update-version.sh
+const LOCAL_VERSION  = '4.9.1'; // bumpar a cada release junto com APP_VERSION
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 

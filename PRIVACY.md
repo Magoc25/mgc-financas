@@ -1,6 +1,6 @@
 # Aviso de Privacidade — MGC Finanças
 
-**Versão:** 1.0 · **Última atualização:** Maio de 2026
+**Versão:** 1.1 · **Última atualização:** Junho de 2026
 
 ---
 
@@ -19,7 +19,7 @@ O MGC Finanças opera em **três camadas** com diferentes controladores:
 | Camada | O que guarda | Quem controla |
 |---|---|---|
 | **Camada 1** (desenvolvedor) | Código hospedado no GitHub Pages; banco de reviews e pings (Supabase compartilhado) | Marlon Gomes da Costa |
-| **Camada 2** (usuário) | Dados financeiros no `localStorage` do próprio dispositivo | Exclusivamente o usuário |
+| **Camada 2** (usuário) | Dados financeiros e cenários de investimento no `localStorage` do próprio dispositivo | Exclusivamente o usuário |
 | **Camada 3** (usuário) | Banco Supabase próprio, configurado opcionalmente pelo usuário | Exclusivamente o usuário |
 
 **Este aviso cobre apenas a Camada 1.** Os dados das Camadas 2 e 3 nunca chegam aos servidores do desenvolvedor.

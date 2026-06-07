@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas o MGC Finanças é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.9.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.9.1-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -101,6 +101,7 @@ Quando quiser sincronizar entre computadores ou acessar pelo celular, basta conf
 - **Comparador** dos produtos lado a lado (tabela + gráfico de barras)
 - **Aprender** — glossário de renda fixa e cenários prontos
 - **Meta** — calcula quanto poupar por mês para um objetivo; **exportação CSV** dos cenários
+- **Modo privacidade** — oculta os valores (`R$ ••••`) por aba, para mostrar o app sem expor seus dados
 
 ### Segurança e Histórico
 - **PIN de acesso** — proteja o dashboard com senha de 4 dígitos
@@ -142,13 +143,13 @@ Seus dados ficam salvos **no próprio navegador**, apenas no seu dispositivo. Pa
 
 ### Opção 2 — Cópia local _(opcional)_
 
-Se quiser uma cópia totalmente independente — útil para arquivamento ou para usar sem conexão garantida:
+Se quiser uma cópia independente — útil para arquivamento ou para guardar uma versão específica:
 
-1. No repositório, clique no botão verde **Code** → **Download ZIP**
-2. Extraia o ZIP em uma pasta no seu computador
-3. Dê duplo clique em `mgc-financas.html`
+1. Abra o arquivo [`mgc-financas.html`](https://github.com/Magoc25/mgc-financas/blob/main/mgc-financas.html) no repositório
+2. Clique em **Download raw file** (ícone de download, no canto superior direito do arquivo)
+3. Dê duplo clique no arquivo baixado
 
-Funciona exatamente igual à versão online, mas sem nenhuma dependência da internet ou do GitHub.
+É **um único arquivo** — todo o app está nele. As bibliotecas visuais (gráficos e estilos) carregam da internet no primeiro acesso.
 
 ### Opção 3 — Sincronizar entre dois ou mais dispositivos _(opcional)_
 
@@ -175,6 +176,11 @@ create table finance_data (
   payload jsonb,
   updated_at timestamptz default now()
 );
+
+-- GRANTs explícitos (sem eles, um Supabase novo pode retornar erro 42501)
+grant select, insert, update, delete on finance_data to anon;
+grant select, insert, update, delete on finance_data to authenticated;
+grant select, insert, update, delete on finance_data to service_role;
 
 alter table finance_data enable row level security;
 
