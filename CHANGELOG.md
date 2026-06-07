@@ -5,6 +5,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.6.0] — Junho 2026
+
+### 🆕 Adicionado
+- **Investimentos — Fase 2**: expansão do simulador de renda fixa
+  - Novos produtos: **LCI/LCA** (isento, % do CDI), **Tesouro Selic** e **Tesouro IPCA+**
+  - Tipos de taxa por produto: **% do CDI** (pós-fixado), **IPCA + taxa real** e fixo (Poupança/Selic)
+  - **Taxas de referência editáveis** (CDI, Selic, IPCA) salvas no dispositivo, alimentando todos os produtos
+  - Comparador ampliado para os 5 produtos (tabela com taxa a.a. + gráfico de barras), com baseline vs Poupança
+  - Exibição da taxa efetiva a.a. derivada (ex.: 95% do CDI ≈ 10,21% a.a.)
+
+---
+
 ## [4.5.0] — Junho 2026
 
 ### 🆕 Adicionado
