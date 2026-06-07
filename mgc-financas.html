@@ -1050,12 +1050,25 @@ on conflict (id) do nothing;</div>
 
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="invResultCards"></div>
 
+  <div id="invRealBox" class="bg-white p-3 rounded-lg shadow-sm border-l-4 border-amber-500"></div>
+
   <div class="bg-white p-4 rounded-lg shadow-md">
     <h3 class="text-sm font-semibold text-gray-600 mb-2">Evolução do saldo</h3>
     <div style="position:relative;height:240px"><canvas id="invChart"></canvas></div>
   </div>
 
   <button onclick="invSalvarCenario()" class="w-full py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition shadow-sm">💾 Salvar cenário</button>
+
+  <details class="bg-white p-4 rounded-lg shadow-md text-sm">
+    <summary class="cursor-pointer font-medium text-gray-600">🎯 Meta: quanto poupar por mês?</summary>
+    <p class="text-xs text-gray-400 mt-2">Usa o produto, a taxa, o prazo e o valor inicial definidos acima.</p>
+    <div class="flex items-center gap-2 mt-3">
+      <label class="text-sm text-gray-700 whitespace-nowrap">Quero chegar a R$</label>
+      <input type="number" step="100" min="0" id="invMetaAlvo" value="50000" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+    </div>
+    <button onclick="invCalcularMeta()" class="w-full mt-3 py-2 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:bg-amber-600 transition">Calcular aporte necessário</button>
+    <div id="invMetaResult" class="mt-3"></div>
+  </details>
 </div>
 
 <!-- ── INV: COMPARAR ─────────────────────────────────────── -->
@@ -1074,7 +1087,10 @@ on conflict (id) do nothing;</div>
 <!-- ── INV: CENÁRIOS ─────────────────────────────────────── -->
 <div id="invSecCenarios" class="inv-section space-y-4">
   <div class="bg-white p-5 rounded-lg shadow-md">
-    <h3 class="text-base font-semibold text-gray-700 mb-3">Cenários salvos</h3>
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-base font-semibold text-gray-700">Cenários salvos</h3>
+      <button onclick="invExportarCSV()" class="text-xs px-3 py-1.5 rounded-lg bg-teal-600 text-white font-medium hover:bg-teal-700 transition">📄 Exportar CSV</button>
+    </div>
     <div id="invCenariosList" class="space-y-2"></div>
   </div>
 </div>
@@ -3585,6 +3601,13 @@ function invRenderResultado() {
         </div>`).join('');
     document.getElementById('invTaxaInfo').textContent =
         `Taxa efetiva ≈ ${(p.taxaAnual * 100).toFixed(2)}% a.a. (${(invTaxaMensalEquiv(p.taxaAnual) * 100).toFixed(3)}% a.m.) · rentabilidade líquida no período: ${(r.rentabPct * 100).toFixed(1)}%`;
+    // rentabilidade real (descontando inflação estimada = IPCA das premissas)
+    const ipca = appData.investimentos.config.ipcaAnual || 0;
+    const liquidoReal = r.liquido / Math.pow(1 + ipca, p.prazoMeses / 12);
+    const rentReal = r.totalInvestido > 0 ? (liquidoReal - r.totalInvestido) / r.totalInvestido : 0;
+    document.getElementById('invRealBox').innerHTML =
+        `<p class="text-xs text-gray-500">Em poder de compra de hoje (descontando IPCA ${(ipca * 100).toFixed(1)}% a.a.)</p>
+         <p class="text-sm font-bold text-gray-800 mt-0.5" style="color:inherit">${formatCurrency(liquidoReal)} <span class="text-xs font-normal ${rentReal >= 0 ? 'text-emerald-600' : 'text-red-500'}">(real ${(rentReal * 100).toFixed(1)}%)</span></p>`;
     invDrawChart(r, p);
 }
 
@@ -3659,6 +3682,66 @@ function invRenderComparar() {
             scales: { x: { ticks: { color: t.txt, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: t.txt, callback: v => 'R$ ' + (v / 1000).toFixed(0) + 'k' }, grid: { color: t.grid } } }
         }
     });
+}
+
+// ── Meta: aporte necessário (Fase 4) ──────────────────────
+function invCalcularMeta() {
+    const p = invGetParams();
+    const alvo = parseFloat(document.getElementById('invMetaAlvo').value) || 0;
+    const el = document.getElementById('invMetaResult');
+    if (alvo <= 0) { el.innerHTML = '<p class="text-xs text-gray-400">Informe um valor alvo.</p>'; return; }
+    const i = invTaxaMensalEquiv(p.taxaAnual);
+    const n = p.prazoMeses;
+    const aliq = p.isento ? 0 : invAliquotaIR(n * 30);
+    const fvInicial = p.valorInicial * Math.pow(1 + i, n);
+    const fator = i > 0 ? (Math.pow(1 + i, n) - 1) / i : n;
+    // resolve o aporte mensal para que o valor LÍQUIDO final (após IR) = alvo
+    const den = fator * (1 - aliq) + aliq * n;
+    const aporte = den !== 0 ? (alvo - fvInicial * (1 - aliq) - aliq * p.valorInicial) / den : 0;
+    if (aporte <= 0) {
+        el.innerHTML = `<p class="text-sm text-emerald-700">🎉 Só com os ${formatCurrency(p.valorInicial)} iniciais você já alcança ${formatCurrency(alvo)} (líquido) em ${n} meses — sem precisar de aportes.</p>`;
+        return;
+    }
+    el.innerHTML =
+        `<p class="text-sm text-gray-700" style="color:inherit">Para chegar a <strong>${formatCurrency(alvo)}</strong> em <strong>${n} meses</strong> (${esc(p.nomeProduto)}), aporte cerca de:</p>
+         <p class="text-lg font-bold text-amber-600 mt-1">${formatCurrency(aporte)} / mês</p>
+         <button onclick="invAplicarMeta(${aporte.toFixed(2)})" class="text-xs text-indigo-600 hover:underline mt-1">Usar esse aporte no simulador</button>`;
+}
+function invAplicarMeta(aporte) {
+    document.getElementById('invAporte').value = Number(aporte).toFixed(2);
+    invOnInput();
+    toast('Aporte aplicado no simulador 👍', 'info');
+}
+
+// ── Exportar cenários em CSV (Fase 4) ─────────────────────
+function invExportarCSV() {
+    const list = appData.investimentos.cenarios || [];
+    if (!list.length) { toast('Nenhum cenário salvo para exportar.', 'info'); return; }
+    const prods = invProdutos();
+    const cab = ['Nome', 'Produto', 'Valor inicial', 'Aporte mensal', 'Prazo (meses)', 'Taxa a.a. (%)', 'Total investido', 'Rendimento bruto', 'IR', 'Liquido'];
+    const q = v => `"${String(v).replace(/"/g, '""')}"`;
+    const linhas = list.map(c => {
+        const prod = prods[c.tipo];
+        return [
+            q(c.nome), q(prod ? prod.nome : c.tipo),
+            (c.params.valorInicial || 0).toFixed(2),
+            (c.params.aporteMensal || 0).toFixed(2),
+            c.params.prazoMeses,
+            ((c.params.taxaAnual || 0) * 100).toFixed(2),
+            (c.resultado.totalInvestido || 0).toFixed(2),
+            (c.resultado.rendimentoBruto || 0).toFixed(2),
+            (c.resultado.ir || 0).toFixed(2),
+            (c.resultado.liquido || 0).toFixed(2)
+        ].join(';');
+    });
+    const csv = '﻿' + cab.join(';') + '\r\n' + linhas.join('\r\n') + '\r\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'cenarios-investimentos.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('CSV exportado 📄', 'success');
 }
 
 // ── Cenários salvos ───────────────────────────────────────
