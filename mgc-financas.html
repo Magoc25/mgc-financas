@@ -999,7 +999,7 @@ on conflict (id) do nothing;</div>
     <h3 class="text-base font-semibold text-indigo-700 mb-4">Simulador de Renda Fixa</h3>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div>
-        <label class="block text-sm font-medium text-gray-700">Produto</label>
+        <label class="block text-sm font-medium text-gray-700">Produto <button type="button" onclick="invGloss('produto')" class="text-indigo-400 hover:text-indigo-600 align-middle" title="O que é cada produto?" aria-label="Ajuda sobre produtos">ⓘ</button></label>
         <select id="invTipo" class="mt-1 block w-full pl-3 pr-8 py-2 text-sm border-gray-300 rounded-md border focus:ring-indigo-500 focus:border-indigo-500" onchange="invOnTipoChange()">
           <option value="poupanca">Poupança (isento)</option>
           <option value="cdb">CDB (% do CDI)</option>
@@ -1009,7 +1009,7 @@ on conflict (id) do nothing;</div>
         </select>
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700">Taxa <span id="invTaxaHint" class="text-xs text-gray-400"></span></label>
+        <label class="block text-sm font-medium text-gray-700">Taxa <span id="invTaxaHint" class="text-xs text-gray-400"></span> <button type="button" onclick="invGloss('taxa')" class="text-indigo-400 hover:text-indigo-600 align-middle" title="Tipos de taxa" aria-label="Ajuda sobre taxa">ⓘ</button></label>
         <div class="flex items-center gap-2 mt-1">
           <input type="number" step="0.1" min="0" id="invTaxa" class="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
           <span id="invTaxaSuffix" class="text-sm text-gray-500 whitespace-nowrap">% a.a.</span>
@@ -1076,6 +1076,47 @@ on conflict (id) do nothing;</div>
   <div class="bg-white p-5 rounded-lg shadow-md">
     <h3 class="text-base font-semibold text-gray-700 mb-3">Cenários salvos</h3>
     <div id="invCenariosList" class="space-y-2"></div>
+  </div>
+</div>
+
+<!-- ── INV: APRENDER ─────────────────────────────────────── -->
+<div id="invSecAprender" class="inv-section space-y-4">
+  <div class="bg-white p-5 rounded-lg shadow-md border-t-4 border-amber-500">
+    <h3 class="text-base font-semibold text-amber-700 mb-2">📚 Aprender</h3>
+    <p class="text-sm text-gray-600">Renda fixa é como "emprestar" seu dinheiro (a um banco ou ao governo) e receber de volta com juros. É mais previsível que a Bolsa e ótima para reserva e metas. Abaixo, cenários prontos para começar e um glossário rápido.</p>
+  </div>
+
+  <div class="bg-white p-5 rounded-lg shadow-md">
+    <h4 class="text-sm font-semibold text-gray-700 mb-3">🎯 Cenários prontos</h4>
+    <div class="space-y-2">
+      <button onclick="invMissao('reserva')" class="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-amber-400 transition">
+        <p class="text-sm font-semibold text-gray-800" style="color:inherit">🛟 Reserva de emergência</p>
+        <p class="text-xs text-gray-400">Tesouro Selic · R$ 1.000 + R$ 300/mês · 12 meses (liquidez diária)</p>
+      </button>
+      <button onclick="invMissao('medio')" class="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-amber-400 transition">
+        <p class="text-sm font-semibold text-gray-800" style="color:inherit">✈️ Sonho de médio prazo</p>
+        <p class="text-xs text-gray-400">CDB · R$ 2.000 + R$ 500/mês · 36 meses</p>
+      </button>
+      <button onclick="invMissao('longo')" class="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-amber-400 transition">
+        <p class="text-sm font-semibold text-gray-800" style="color:inherit">🌅 Longo prazo / aposentadoria</p>
+        <p class="text-xs text-gray-400">Tesouro IPCA+ · R$ 5.000 + R$ 400/mês · 20 anos (protege da inflação)</p>
+      </button>
+    </div>
+  </div>
+
+  <div class="bg-white p-5 rounded-lg shadow-md">
+    <h4 class="text-sm font-semibold text-gray-700 mb-1">📖 Glossário</h4>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">CDI</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Taxa de referência dos empréstimos entre bancos. A maioria dos investimentos pós-fixados rende um percentual dele (ex.: 100% do CDI). Anda colado na Selic.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">Selic</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Taxa básica de juros da economia, definida pelo Banco Central. É a base do Tesouro Selic e referência para o CDI.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">IPCA</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Índice oficial da inflação no Brasil. "IPCA+" significa render a inflação MAIS uma taxa fixa, protegendo o poder de compra.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">Prefixado × Pós-fixado</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Prefixado = taxa fixa travada na aplicação (você já sabe quanto vai receber). Pós-fixado = rende um % de um indexador que varia (ex.: 100% do CDI); o resultado depende de como o indexador se comportar.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">IR regressivo</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Imposto sobre o rendimento de aplicações tributadas. Cai com o tempo: 22,5% (até 180 dias), 20%, 17,5% e 15% (acima de 720 dias). Quanto mais tempo investido, menos imposto.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">Poupança</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Isenta de IR e com liquidez, mas costuma render menos (~0,5% ao mês + TR). Útil como referência de comparação.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">CDB</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Título emitido por bancos; rende % do CDI ou taxa prefixada. Tem IR (regressivo) e é protegido pelo FGC.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">LCI / LCA</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Títulos de crédito imobiliário/agro, ISENTOS de IR para pessoa física. Por isso uma LCI a 95% do CDI pode render mais que um CDB a 100%.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">Tesouro Direto</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Títulos do governo federal. Tesouro Selic: pós-fixado, liquidez diária, ideal para reserva. Tesouro IPCA+: protege da inflação, ideal para longo prazo. Ambos têm IR.</p></details>
+    <details class="border-b border-gray-100 py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">FGC</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Fundo Garantidor de Créditos: garante até R$ 250 mil por CPF e por instituição em poupança, CDB e LCI/LCA, caso o banco quebre.</p></details>
+    <details class="py-2"><summary class="cursor-pointer text-sm font-medium text-gray-700">Liquidez</summary><p class="text-xs text-gray-500 mt-1 leading-relaxed">Facilidade de resgatar o dinheiro sem perder valor. Tesouro Selic e poupança têm alta liquidez — ideais para emergências.</p></details>
   </div>
 </div>
 
@@ -3341,12 +3382,12 @@ function switchContext(ctx) {
 
 function navToInv(sec) {
     _activeInvSection = sec;
-    const secMap = { simular: 'invSecSimular', comparar: 'invSecComparar', cenarios: 'invSecCenarios' };
+    const secMap = { simular: 'invSecSimular', comparar: 'invSecComparar', cenarios: 'invSecCenarios', aprender: 'invSecAprender' };
     Object.entries(secMap).forEach(([k, id]) => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('inv-active', k === sec);
     });
-    const navMap = { simular: 'invNavSimular', comparar: 'invNavComparar', cenarios: 'invNavCenarios' };
+    const navMap = { simular: 'invNavSimular', comparar: 'invNavComparar', cenarios: 'invNavCenarios', aprender: 'invNavAprender' };
     Object.entries(navMap).forEach(([k, id]) => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('nav-active', k === sec);
@@ -3355,6 +3396,32 @@ function navToInv(sec) {
     if (sec === 'simular')  invRenderResultado();
     if (sec === 'comparar') invRenderComparar();
     if (sec === 'cenarios') invRenderCenarios();
+}
+
+// ── Educação (Fase 3): dicas rápidas e cenários prontos ───
+function invGloss(key) {
+    const tips = {
+        produto: 'Poupança, CDB, LCI/LCA e Tesouro têm liquidez, risco e tributação diferentes. Toque em "Aprender" para o glossário completo.',
+        taxa: 'Prefixado = taxa fixa. % do CDI = pós-fixado (acompanha o CDI). IPCA+ = inflação + juro real. Veja a aba "Aprender".'
+    };
+    toast(tips[key] || 'Veja a aba Aprender para detalhes.', 'info');
+}
+
+function invMissao(key) {
+    const m = {
+        reserva: { tipo: 'tesouroSelic', vi: 1000, ap: 300, prazo: 12 },
+        medio:   { tipo: 'cdb',          vi: 2000, ap: 500, prazo: 36 },
+        longo:   { tipo: 'tesouroIPCA',  vi: 5000, ap: 400, prazo: 240 }
+    }[key];
+    if (!m) return;
+    document.getElementById('invTipo').value = m.tipo;
+    invOnTipoChange();
+    document.getElementById('invValorInicial').value = m.vi;
+    document.getElementById('invAporte').value = m.ap;
+    document.getElementById('invPrazo').value = m.prazo;
+    invOnInput();
+    navToInv('simular');
+    toast('Cenário pré-preenchido — ajuste como quiser 👍', 'info');
 }
 
 // ── Motor de cálculo (funções puras) ──────────────────────
@@ -3760,6 +3827,10 @@ initInvestimentos();
         <button class="nav-item" id="invNavCenarios" onclick="navToInv('cenarios')" aria-label="Cenários">
             <span class="nav-icon">💼</span>
             <span>Cenários</span>
+        </button>
+        <button class="nav-item" id="invNavAprender" onclick="navToInv('aprender')" aria-label="Aprender">
+            <span class="nav-icon">📚</span>
+            <span>Aprender</span>
         </button>
         <button class="nav-item" onclick="abrirMaisSheet()" aria-label="Mais opções">
             <span class="nav-icon">⋯</span>
