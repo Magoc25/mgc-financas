@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.8.0] — Junho 2026
+
+### 🆕 Adicionado
+- **Investimentos — Fase 4 (avançado)**:
+  - **Rentabilidade real**: mostra o valor líquido em poder de compra de hoje, descontando o IPCA das premissas
+  - **Meta**: calcula o aporte mensal necessário para atingir um valor líquido alvo (considerando o IR regressivo), com botão para aplicar no simulador
+  - **Exportar CSV** dos cenários salvos (BOM UTF-8)
+
+---
+
 ## [4.7.0] — Junho 2026
 
 ### 🆕 Adicionado
