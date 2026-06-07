@@ -118,10 +118,20 @@
         }
 
         /* ── MÓDULO INVESTIMENTOS (v4.5.0) ────────────────────── */
+        #ctxBar { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 1.25rem auto 0; max-width: 430px; }
         #ctxSwitch {
             display: flex; gap: 4px; background: #eef2ff; border: 1px solid #e0e7ff;
-            border-radius: 12px; padding: 4px; max-width: 360px; margin: 1.25rem auto 0;
+            border-radius: 12px; padding: 4px; flex: 1; max-width: 360px;
         }
+        .priv-toggle {
+            width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px;
+            border: 1px solid #e0e7ff; background: #eef2ff; color: #4f46e5;
+            font-size: 1.05rem; cursor: pointer; -webkit-tap-highlight-color: transparent;
+            transition: background .15s, color .15s;
+        }
+        html.dark .priv-toggle { background: #1e293b; border-color: #334155; color: #a5b4fc; }
+        .priv-toggle.priv-on { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+        #ctxContas.priv-blur canvas, #ctxInvestir.priv-blur canvas { filter: blur(9px); transition: filter .2s; }
         html.dark #ctxSwitch { background: #1e293b; border-color: #334155; }
         .ctx-btn {
             flex: 1; padding: 0.55rem 0.5rem; border: none; background: transparent;
@@ -680,10 +690,13 @@ on conflict (id) do nothing;</div>
     </div>
 </div>
 
-<!-- ── CONTEXT SWITCHER (Contas ↔ Investir) ──────────────── -->
-<div id="ctxSwitch">
+<!-- ── CONTEXT SWITCHER (Contas ↔ Investir) + PRIVACIDADE ── -->
+<div id="ctxBar">
+  <div id="ctxSwitch">
     <button id="ctxBtnContas" class="ctx-btn ctx-active" onclick="switchContext('contas')">💳 Contas</button>
     <button id="ctxBtnInvestir" class="ctx-btn" onclick="switchContext('investir')">📈 Investir</button>
+  </div>
+  <button id="privToggle" class="priv-toggle" onclick="togglePrivacy()" title="Ocultar valores desta aba" aria-label="Ocultar ou mostrar valores">👁</button>
 </div>
 
 <!-- ══════════ CONTEXT: CONTAS ══════════ -->
@@ -1371,7 +1384,15 @@ function getColor(cat) {
     const idx = getCategorias().indexOf(cat) - PREDEFINED_CATEGORIES.length;
     return EXTRA_COLORS[Math.max(0, idx) % EXTRA_COLORS.length];
 }
-function formatCurrency(val) { return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+// Privacidade: oculta valores por aba (Contas/Investir), persistido no dispositivo
+const PRIV_KEY = 'mgc_privacy';
+let _privacy = (() => { try { return Object.assign({ contas: false, investir: false }, JSON.parse(localStorage.getItem(PRIV_KEY) || '{}')); } catch (e) { return { contas: false, investir: false }; } })();
+let _fmtCtx = 'contas';
+function _savePrivacy() { try { localStorage.setItem(PRIV_KEY, JSON.stringify(_privacy)); } catch (e) {} }
+function formatCurrency(val) {
+    if ((_fmtCtx === 'contas' && _privacy.contas) || (_fmtCtx === 'investir' && _privacy.investir)) return 'R$ ••••';
+    return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
 const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 function isDark() { return document.documentElement.classList.contains('dark'); }
 function chartTextColor()  { return isDark() ? '#94a3b8' : '#6b7280'; }
@@ -2231,6 +2252,7 @@ function animateKpi(id, newVal) {
 }
 
 function processarDadosERenderizar() {
+    _fmtCtx = 'contas';
     TOTAL_FIXED  = appData.fixas.reduce((s, c) => s + c.amount, 0);
     RENDA_MENSAL = appData.rendas.reduce((s, c) => s + c.amount, 0);
 
@@ -3393,7 +3415,30 @@ function switchContext(ctx) {
     document.getElementById('ctxBtnContas').classList.toggle('ctx-active', ctx === 'contas');
     document.getElementById('ctxBtnInvestir').classList.toggle('ctx-active', ctx === 'investir');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    applyPrivacyUI();
     if (ctx === 'investir') invRenderAll();
+}
+
+// ── Privacidade: ocultar valores por aba (👁) ─────────────
+function togglePrivacy() {
+    _privacy[_activeContext] = !_privacy[_activeContext];
+    _savePrivacy();
+    applyPrivacyUI();
+    if (_activeContext === 'contas') processarDadosERenderizar();
+    else invRenderAll();
+}
+function applyPrivacyUI() {
+    const c = document.getElementById('ctxContas');
+    const i = document.getElementById('ctxInvestir');
+    if (c) c.classList.toggle('priv-blur', _privacy.contas);
+    if (i) i.classList.toggle('priv-blur', _privacy.investir);
+    const on = !!_privacy[_activeContext];
+    const btn = document.getElementById('privToggle');
+    if (btn) {
+        btn.textContent = on ? '🙈' : '👁';
+        btn.classList.toggle('priv-on', on);
+        btn.title = on ? 'Mostrar valores desta aba' : 'Ocultar valores desta aba';
+    }
 }
 
 function navToInv(sec) {
@@ -3586,6 +3631,7 @@ function invAtualizarSobraBtn() {
 
 // ── Render: simulador ─────────────────────────────────────
 function invRenderResultado() {
+    _fmtCtx = 'investir';
     const p = invGetParams();
     const r = invSimular({ valorInicial: p.valorInicial, aporteMensal: p.aporteMensal, prazoMeses: p.prazoMeses, taxaMensal: invTaxaMensalEquiv(p.taxaAnual), isento: p.isento });
     const cards = [
@@ -3644,6 +3690,7 @@ function invDrawChart(r, p) {
 
 // ── Render: comparar Poupança × CDB ───────────────────────
 function invRenderComparar() {
+    _fmtCtx = 'investir';
     const p = invGetParams();
     const prods = invProdutos();
     const rows = Object.keys(prods).map(k => {
@@ -3770,6 +3817,7 @@ function invExcluirCenario(id) {
 }
 
 function invRenderCenarios() {
+    _fmtCtx = 'investir';
     const list = appData.investimentos.cenarios || [];
     const el = document.getElementById('invCenariosList');
     if (!el) return;
@@ -3814,6 +3862,7 @@ function initInvestimentos() {
     });
     invOnTipoChange();
     invRenderCenarios();
+    applyPrivacyUI();
 }
 
 inicializar();
