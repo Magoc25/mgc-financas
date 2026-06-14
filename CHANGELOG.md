@@ -5,6 +5,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.9.3] — Junho 2026
+
+### 🆕 Adicionado
+- **Botão do GitHub no rodapé** — acesso direto ao repositório (código-fonte) a partir do app
+
+### 🔧 Melhorado
+- **Aviso de nova versão mais confiável** — comparação de versões tolerante a formatos diferentes (evita banner indevido ou ausente)
+- Versão do app unificada em uma **fonte única** interna, reduzindo risco de divergência entre telas
+- Rodapé reorganizado na ordem padrão: GitHub → Apoiar → Avaliações → © versão
+
+---
+
 ## [4.9.2] — Junho 2026
 
 ### 🔧 Melhorado

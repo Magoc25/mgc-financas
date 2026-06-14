@@ -1155,12 +1155,15 @@ on conflict (id) do nothing;</div>
 
 </div><!-- /ctxInvestir -->
 
-<div class="mt-10 mb-2 text-center text-sm text-gray-400 font-medium">
-    &copy; <script>document.write(new Date().getFullYear())</script> MGC &middot; <span id="appVersionFooter"></span>
-</div>
-<div class="app-footer mb-4">
+<div class="app-footer mt-10 mb-2">
+    <button class="footer-btn" onclick="window.open('https://github.com/Magoc25/mgc-financas','_blank')" title="GitHub">
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="13" height="13" fill="currentColor" style="vertical-align:-.15em;margin-right:3px"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub
+    </button>
     <button class="footer-btn" onclick="openPixModal()">☕ Apoiar</button>
     <button class="footer-btn" onclick="openReviewsModal('list')">⭐ Avaliações</button>
+</div>
+<div class="mb-4 text-center text-sm text-gray-400 font-medium">
+    &copy; <script>document.write(new Date().getFullYear())</script> MGC &middot; <span id="appVersionFooter"></span>
 </div>
 
 <!-- PIX MODAL -->
@@ -1318,8 +1321,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.9.2'; // atualizado por update-version.sh
-const LOCAL_VERSION  = '4.9.2'; // bumpar a cada release junto com APP_VERSION
+const APP_VERSION    = '4.9.3'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -3353,6 +3355,18 @@ async function submitReview() {
     } catch(e) { /* offline — mantém valor do HTML */ }
 })();
 
+// Comparação de versão "x.y.z": 1 se a>b, -1 se a<b, 0 se iguais (robusto a 'v', partes faltando ou lixo)
+function cmpVersion(a, b) {
+    const pa = String(a).replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const pb = String(b).replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const x = pa[i] || 0, y = pb[i] || 0;
+        if (x > y) return 1;
+        if (x < y) return -1;
+    }
+    return 0;
+}
+
 // Banner de nova versão via Supabase — verifica app_config uma vez por dia
 (async () => {
     if (!revClient) return;
@@ -3369,12 +3383,9 @@ async function submitReview() {
             .single();
         if (error || !data) return;
         localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now() }));
-        const remote = data.value.replace(/^v/, '');
-        const parse = v => v.split('.').map(Number);
-        const [ra, rb, rc] = parse(remote);
-        const [la, lb, lc] = parse(LOCAL_VERSION);
-        const isNewer = ra > la || (ra === la && rb > lb) || (ra === la && rb === lb && rc > lc);
-        if (!isNewer) return;
+        const remote = String(data.value || '').replace(/^v/, '');
+        // Só dispara se a versão publicada (app_config) for MAIOR que a deste build (APP_VERSION)
+        if (cmpVersion(remote, APP_VERSION) <= 0) return;
         const banner = document.createElement('div');
         banner.id = 'updateBanner';
         banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a73e8;' +
@@ -3401,7 +3412,7 @@ async function submitReview() {
     if (!deviceId) { deviceId = crypto.randomUUID(); localStorage.setItem('mgc-financas_device_id', deviceId); }
     try {
         await revClient.from('app_pings').upsert(
-            { app_name: 'mgc-financas', version: LOCAL_VERSION, device_id: deviceId, ping_date: today },
+            { app_name: 'mgc-financas', version: APP_VERSION, device_id: deviceId, ping_date: today },
             { onConflict: 'app_name,device_id,ping_date', ignoreDuplicates: true }
         );
         localStorage.setItem(PING_KEY, today);
