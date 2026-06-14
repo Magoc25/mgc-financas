@@ -1,6 +1,6 @@
 # Termos de Uso — MGC Finanças
 
-**Versão:** 4.9.1 · **Data:** Junho de 2026
+**Versão:** 4.9.3 · **Data:** Junho de 2026
 **Desenvolvedor:** Marlon Gomes da Costa (MGC Dev) · marlongc25@protonmail.com
 
 ---
