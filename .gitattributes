@@ -1,0 +1,14 @@
+# Força LF para todo arquivo de texto (cópia de trabalho e repositório)
+* text=auto eol=lf
+
+# Binários — nunca normalizar fins de linha
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
+*.woff  binary
+*.woff2 binary
