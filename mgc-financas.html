@@ -888,11 +888,20 @@ on conflict (id) do nothing;</div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dívida / déficit acumulado hoje</label>
+                <label class="flex items-center gap-2 mb-1.5 cursor-pointer">
+                    <input id="planDividaAuto" type="checkbox" class="accent-indigo-600" onchange="planSetDividaAuto(this.checked)">
+                    <span class="text-xs text-gray-600">Automático — somar o déficit dos meses anteriores</span>
+                </label>
                 <div class="flex items-center gap-2">
                     <span class="text-sm text-gray-400">R$</span>
                     <input id="planDividaInicial" type="number" min="0" step="50" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400" placeholder="0,00" onchange="planSetDivida(this.value)">
                 </div>
-                <button id="planEstimarBtn" onclick="planEstimarDivida()" class="mt-1 text-xs text-indigo-500 hover:text-indigo-700 underline"></button>
+                <div class="flex items-center gap-2 mt-1.5">
+                    <span class="text-xs text-gray-400 whitespace-nowrap">+ somar outro valor</span>
+                    <span class="text-sm text-gray-400">R$</span>
+                    <input id="planDividaAdicional" type="number" min="0" step="50" class="w-28 px-2 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400" placeholder="0,00" title="Dívidas que o app não conhece (empréstimos, etc.)" onchange="planSetDividaAdicional(this.value)">
+                </div>
+                <p id="planDividaTotal" class="mt-1 text-xs text-gray-500"></p>
             </div>
             <div>
                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Economizar por mês <span class="text-gray-400 normal-case font-normal">— cortar gastos ou somar renda</span></label>
@@ -1379,7 +1388,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.10.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.10.1'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -1487,6 +1496,8 @@ function normalizarAppData(data) {
     if (!data.planejamento || typeof data.planejamento !== 'object') data.planejamento = {};
     if (data.planejamento.economia == null)      data.planejamento.economia = 0;
     if (data.planejamento.dividaInicial === undefined) data.planejamento.dividaInicial = null; // null = estimar dos lançamentos
+    if (data.planejamento.dividaAuto == null)      data.planejamento.dividaAuto = true;   // somar déficit dos meses anteriores automaticamente
+    if (data.planejamento.dividaAdicional == null) data.planejamento.dividaAdicional = 0;  // valor extra (dívidas fora do app)
     // Investimentos (módulo v4.5.0)
     if (!data.investimentos || typeof data.investimentos !== 'object') data.investimentos = {};
     if (!Array.isArray(data.investimentos.cenarios)) data.investimentos.cenarios = [];
@@ -2589,9 +2600,9 @@ function renderDashboard() {
 
     // Charts
     renderBarChart(monthlyFaturasTotals, monthlyDividasTotals);
-    renderPieChart(categoryTotalsThisMonth, valorDividaRef, mesRef);
+    renderPieChart(categoryTotalsThisMonth, valorDividaRef, mesRef, carriedMes);
     renderCategoryTrendChart(monthlyDividasTotals);
-    renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef);
+    renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef, rendaExtraMes, carriedMes);
     renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals);
     renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc, rendaExtraMes, carriedMes);
 
@@ -2640,6 +2651,7 @@ function renderBarChart(monthlyFaturasTotals, monthlyDividasTotals) {
             datasets: [
                 { type: 'line', label: 'Renda Mensal', data: monthNames.map((_, i) => RENDA_MENSAL + (_rendaExtraArr[i] || 0)), borderColor: 'rgba(16,185,129,1)', borderWidth: 2, borderDash: [5,5], pointRadius: 0, fill: false },
                 { type: 'bar',  label: 'Dívidas / Cheque', data: monthlyDividasTotals, backgroundColor: 'rgba(220,38,38,0.8)', borderColor: 'rgba(185,28,28,1)', borderWidth: 1 },
+                ...(_carriedInArr.some(v => v > 0) ? [{ type: 'bar', label: 'Déficit anterior', data: _carriedInArr.slice(), backgroundColor: 'rgba(126,34,206,0.8)', borderColor: 'rgba(107,33,168,1)', borderWidth: 1 }] : []),
                 { type: 'bar',  label: 'Faturas (Cartão)', data: monthlyFaturasTotals, backgroundColor: 'rgba(59,130,246,0.8)', borderColor: 'rgba(37,99,235,1)', borderWidth: 1 },
                 { type: 'bar',  label: 'Despesas Fixas', data: new Array(visibleMonths).fill(TOTAL_FIXED), backgroundColor: 'rgba(249,115,22,0.8)', borderColor: 'rgba(234,88,12,1)', borderWidth: 1, borderRadius: { topLeft: 4, topRight: 4 } }
             ]
@@ -2655,7 +2667,7 @@ function renderBarChart(monthlyFaturasTotals, monthlyDividasTotals) {
     });
 }
 
-function renderPieChart(categoryTotals, valorDividaRef, mesRef) {
+function renderPieChart(categoryTotals, valorDividaRef, mesRef, carriedMes = 0) {
     const pieCtx = document.getElementById('categoryChart').getContext('2d');
     if (pieChartInstance) pieChartInstance.destroy();
     document.getElementById('pieChartTitle').textContent = `Distribuição de Gastos (${mesRef})`;
@@ -2672,6 +2684,7 @@ function renderPieChart(categoryTotals, valorDividaRef, mesRef) {
     }
     if (TOTAL_FIXED > 0)    { labels.push('Despesas Fixas'); data.push(TOTAL_FIXED); colors.push(COLOR_PALETTE['Despesas Fixas']); borderColors.push(isDark() ? '#1e293b' : '#ffffff'); }
     if (valorDividaRef > 0) { labels.push('Dívidas Extras'); data.push(valorDividaRef); colors.push(COLOR_PALETTE['Dívidas Extras']); borderColors.push(isDark() ? '#1e293b' : '#ffffff'); }
+    if (carriedMes > 0)     { labels.push('Déficit anterior'); data.push(carriedMes); colors.push('#7e22ce'); borderColors.push(isDark() ? '#1e293b' : '#ffffff'); }
     if (data.length === 0)  { labels = ['Nenhum Gasto']; data = [1]; colors = ['#e2e8f0']; borderColors = ['#e2e8f0']; }
 
     const txtColor = chartTextColor();
@@ -2813,15 +2826,15 @@ function renderCategoryTrendChart(monthlyDividasTotals) {
 
 let waterfallChart = null;
 
-function renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef) {
+function renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef, rendaExtraMes = 0, carriedMes = 0) {
     const ctx = document.getElementById('waterfallChart').getContext('2d');
     if (waterfallChart) waterfallChart.destroy();
 
-    const renda  = RENDA_MENSAL;
+    const renda  = RENDA_MENSAL + rendaExtraMes;
     const fixas  = TOTAL_FIXED;
     const fatura = valorFaturaRef;
     const divida = valorDividaRef;
-    const saldo  = renda - fixas - fatura - divida;
+    const saldo  = renda - fixas - fatura - divida - carriedMes;
 
     const segments = [];
     let pos = renda;
@@ -2830,6 +2843,7 @@ function renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef) {
     if (fixas > 0)  { const b = pos - fixas;  segments.push({ label: 'Desp. Fixas', range: [b, pos], color: '#F97316' }); pos = b; }
     if (fatura > 0) { const b = pos - fatura; segments.push({ label: 'Faturas',     range: [b, pos], color: '#3B82F6' }); pos = b; }
     if (divida > 0) { const b = pos - divida; segments.push({ label: 'Dívidas',     range: [b, pos], color: '#DC2626' }); pos = b; }
+    if (carriedMes > 0) { const b = pos - carriedMes; segments.push({ label: 'Déficit ant.', range: [b, pos], color: '#7E22CE' }); pos = b; }
     segments.push({ label: 'Saldo', range: saldo >= 0 ? [0, saldo] : [saldo, 0], color: saldo >= 0 ? '#22C55E' : '#EF4444' });
 
     const txtColor  = chartTextColor();
@@ -3045,10 +3059,11 @@ function _planEstimativaDivida() {
     for (let i = 0; i < HISTORY_COUNT; i++) past += (_saldoBaseArr[i] || 0);
     return Math.max(0, -past);
 }
-// Dívida inicial efetiva: valor manual do usuário, ou a estimativa quando não definido
+// Dívida inicial efetiva: base (automática = déficit dos meses anteriores, ou manual) + valor adicional
 function _planStartDebt() {
-    const dv = appData.planejamento.dividaInicial;
-    return (dv != null) ? Math.max(0, dv) : _planEstimativaDivida();
+    const pj = appData.planejamento;
+    const base = pj.dividaAuto ? _planEstimativaDivida() : Math.max(0, pj.dividaInicial || 0);
+    return base + Math.max(0, pj.dividaAdicional || 0);
 }
 
 // Projeta o saldo acumulado do mês atual em diante, aplicando a economia mensal
@@ -3143,8 +3158,14 @@ function planSetDivida(val) {
     renderPlanejamento();
 }
 
-function planEstimarDivida() {
-    appData.planejamento.dividaInicial = _planEstimativaDivida();
+function planSetDividaAuto(checked) {
+    appData.planejamento.dividaAuto = !!checked;
+    salvarDados();
+    renderPlanejamento();
+}
+
+function planSetDividaAdicional(val) {
+    appData.planejamento.dividaAdicional = Math.max(0, parseFloat(val) || 0);
     salvarDados();
     renderPlanejamento();
 }
@@ -3177,15 +3198,34 @@ function renderPlanejamento() {
     _planUpdateResultado(); // resultado + selo (sempre; gráfico só se aberto)
     if (!_planPanelOpen) return;
 
-    // Dívida inicial + botão de estimativa
-    const dvEl = document.getElementById('planDividaInicial');
-    const est  = _planEstimativaDivida();
+    // Dívida inicial: automática (déficit dos meses anteriores) + valor adicional
+    const pj    = appData.planejamento;
+    const est   = _planEstimativaDivida();
+    const autoEl = document.getElementById('planDividaAuto');
+    const dvEl   = document.getElementById('planDividaInicial');
+    const addEl  = document.getElementById('planDividaAdicional');
+    if (autoEl) autoEl.checked = !!pj.dividaAuto;
     if (dvEl && document.activeElement !== dvEl) {
-        dvEl.value = (appData.planejamento.dividaInicial != null) ? appData.planejamento.dividaInicial : '';
-        dvEl.placeholder = est > 0 ? est.toFixed(2) : '0,00';
+        if (pj.dividaAuto) {
+            dvEl.value = est ? est.toFixed(2) : '0';
+            dvEl.disabled = true;
+            dvEl.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+        } else {
+            dvEl.value = (pj.dividaInicial != null) ? pj.dividaInicial : '';
+            dvEl.placeholder = est > 0 ? est.toFixed(2) : '0,00';
+            dvEl.disabled = false;
+            dvEl.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+        }
     }
-    const eb = document.getElementById('planEstimarBtn');
-    if (eb) eb.textContent = `↺ Estimar pelos meses anteriores (${formatCurrency(est)})`;
+    if (addEl && document.activeElement !== addEl) addEl.value = pj.dividaAdicional ? pj.dividaAdicional : '';
+    const totEl = document.getElementById('planDividaTotal');
+    if (totEl) {
+        const base = pj.dividaAuto ? est : Math.max(0, pj.dividaInicial || 0);
+        const add  = Math.max(0, pj.dividaAdicional || 0);
+        totEl.textContent = add > 0
+            ? `Total considerado: ${formatCurrency(base)} + ${formatCurrency(add)} = ${formatCurrency(base + add)}`
+            : `Total considerado: ${formatCurrency(base + add)}`;
+    }
 
     // Economia (campo + slider)
     const eco   = appData.planejamento.economia || 0;

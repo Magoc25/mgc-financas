@@ -5,6 +5,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.10.1] — Julho 2026
+
+### 🔧 Melhorado
+- **"Trazer déficit do mês anterior" agora reflete em todos os gráficos** — ao marcar o check, o déficit trazido aparece como componente no gráfico "Custo de Vida vs Renda", na distribuição de gastos (pizza) e na cascata do mês — além do saldo e do fluxo de caixa (antes só o saldo mudava)
+- **Planejamento de Quitação — dívida inicial automática** — o campo "Dívida / déficit acumulado hoje" ganhou um modo **Automático** (soma o déficit dos meses anteriores, já preenchido) e um campo para **somar outro valor** (dívidas fora do app), mostrando o total considerado
+
+---
+
 ## [4.10.0] — Julho 2026
 
 ### 🆕 Adicionado
