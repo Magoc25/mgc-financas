@@ -5,6 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.10.3] — Julho 2026
+
+### 🔧 Melhorado
+- **Controle de Pagamentos inicia recolhido** ao abrir o app (igual ao Planejamento de Quitação), deixando a tela inicial mais enxuta
+
+---
+
 ## [4.10.2] — Julho 2026
 
 ### 🔧 Melhorado
