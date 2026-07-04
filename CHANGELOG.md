@@ -5,6 +5,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.10.2] — Julho 2026
+
+### 🔧 Melhorado
+- **Simulador — "Dívida / déficit acumulado hoje" automático mais intuitivo** — o valor automático agora é igual ao **Saldo Negativo do mês atual** (já com os déficits trazidos via "Trazer déficit"), em vez de somar todos os meses anteriores
+- **Déficit trazido entra na "SAÍDA TOTAL" das Faturas de Cartão** — a linha de saída total do mês passa a incluir o déficit do mês anterior
+
+### 🐛 Correções
+- **Versão exibida no topo do app** agora usa a mesma fonte única do rodapé (antes o topo podia ficar preso numa versão antiga por cache)
+
+---
+
 ## [4.10.1] — Julho 2026
 
 ### 🔧 Melhorado

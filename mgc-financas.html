@@ -890,7 +890,7 @@ on conflict (id) do nothing;</div>
                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dívida / déficit acumulado hoje</label>
                 <label class="flex items-center gap-2 mb-1.5 cursor-pointer">
                     <input id="planDividaAuto" type="checkbox" class="accent-indigo-600" onchange="planSetDividaAuto(this.checked)">
-                    <span class="text-xs text-gray-600">Automático — somar o déficit dos meses anteriores</span>
+                    <span class="text-xs text-gray-600">Automático — usar meu déficit de hoje (= Saldo Negativo do mês, já com os déficits trazidos)</span>
                 </label>
                 <div class="flex items-center gap-2">
                     <span class="text-sm text-gray-400">R$</span>
@@ -1388,7 +1388,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.10.1'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.10.2'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -3015,10 +3015,11 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
         tfootHTML += totalRow;
     }
 
-    let megaRow = `<tr class="bg-gray-800 font-bold text-white"><td class="px-4 py-3 fat-s1">SAÍDA TOTAL (CARTÃO + FIXAS + EXTRAS)</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
+    const _lblDef = _carriedInArr.some(v => v > 0) ? ' + DÉFICIT' : '';
+    let megaRow = `<tr class="bg-gray-800 font-bold text-white"><td class="px-4 py-3 fat-s1">SAÍDA TOTAL (CARTÃO + FIXAS + EXTRAS${_lblDef})</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
     monthlyFaturasTotals.forEach((val, i) => {
         const hl = i === selectedMonthIndex ? 'bg-gray-700' : '';
-        megaRow += `<td class="px-4 py-3 whitespace-nowrap text-right ${hl}">${formatCurrency(val + TOTAL_FIXED + monthlyDividasTotals[i])}</td>`;
+        megaRow += `<td class="px-4 py-3 whitespace-nowrap text-right ${hl}">${formatCurrency(val + TOTAL_FIXED + monthlyDividasTotals[i] + (_carriedInArr[i] || 0))}</td>`;
     });
     megaRow += `<td></td></tr>`;
     tfootHTML += megaRow;
@@ -3053,11 +3054,10 @@ function togglePlanPanel() {
     if (_planPanelOpen) renderPlanejamento();
 }
 
-// Déficit acumulado estimado a partir dos meses JÁ transcorridos (saldo base negativo somado)
+// Déficit acumulado hoje = |Saldo Negativo do mês atual| (já inclui o que foi trazido via "Trazer déficit").
+// Marcar "Trazer déficit" nos meses vai empilhando o rombo até o mês atual, então este número acompanha.
 function _planEstimativaDivida() {
-    let past = 0;
-    for (let i = 0; i < HISTORY_COUNT; i++) past += (_saldoBaseArr[i] || 0);
-    return Math.max(0, -past);
+    return Math.max(0, -(_saldoAdjArr[HISTORY_COUNT] || 0));
 }
 // Dívida inicial efetiva: base (automática = déficit dos meses anteriores, ou manual) + valor adicional
 function _planStartDebt() {
@@ -3066,14 +3066,14 @@ function _planStartDebt() {
     return base + Math.max(0, pj.dividaAdicional || 0);
 }
 
-// Projeta o saldo acumulado do mês atual em diante, aplicando a economia mensal
+// Projeta o saldo acumulado a partir do PRÓXIMO mês (o mês atual já está embutido na dívida de hoje)
 function planCompute(economia) {
     const now = HISTORY_COUNT;
     const startDebt = _planStartDebt();
-    let bal = -startDebt;
-    const points = [];
+    let bal = -startDebt;                                    // posição de HOJE (fim do mês atual)
+    const points = [{ i: now, label: monthNames[now], bal }]; // ponto inicial = dívida de hoje
     let regIdx = (bal >= 0) ? now : -1;
-    for (let i = now; i < visibleMonths; i++) {
+    for (let i = now + 1; i < visibleMonths; i++) {
         bal += (_saldoBaseArr[i] || 0) + economia;
         points.push({ i, label: monthNames[i], bal });
         if (regIdx === -1 && bal >= 0) regIdx = i;
@@ -3124,7 +3124,7 @@ function _planUpdateResultado() {
         chip.textContent = 'Sem déficit';
         chip.className = 'text-xs font-medium rounded px-2 py-0.5 text-emerald-600 bg-emerald-50';
     } else if (r.regIdx !== -1) {
-        const meses = r.regIdx - now + 1;
+        const meses = r.regIdx - now;
         resEl.className = 'rounded-lg p-4 mb-4 text-sm bg-indigo-50 text-indigo-900 border border-indigo-200';
         resEl.innerHTML = `Partindo de <strong>${formatCurrency(r.startDebt)}</strong> de déficit, economizando <strong>${formatCurrency(economia)}/mês</strong> você <strong>regulariza em ${monthNames[r.regIdx]}</strong> — em ${meses} ${meses === 1 ? 'mês' : 'meses'}.`;
         chip.textContent = 'Regulariza em ' + monthNames[r.regIdx];
@@ -3185,10 +3185,10 @@ function planCalcAlvo() {
     if (!sel || !out) return;
     const iAlvo = monthNames.indexOf(sel.value);
     const now = HISTORY_COUNT;
-    if (iAlvo < now) { out.textContent = ''; return; }
+    if (iAlvo <= now) { out.textContent = ''; return; }
     let sumSaldo = 0;
-    for (let i = now; i <= iAlvo; i++) sumSaldo += (_saldoBaseArr[i] || 0);
-    const count = iAlvo - now + 1;
+    for (let i = now + 1; i <= iAlvo; i++) sumSaldo += (_saldoBaseArr[i] || 0);
+    const count = iAlvo - now;   // meses de now+1 até o alvo
     let z = Math.max(0, Math.ceil(((_planStartDebt() - sumSaldo) / count) / 10) * 10);
     out.textContent = z <= 0 ? 'já dá certo sem economizar nada 🎉' : `economize ${formatCurrency(z)}/mês`;
 }
@@ -3730,24 +3730,10 @@ async function submitReview() {
     document.getElementById('reviewThankYou').classList.remove('hidden');
 }
 
-// Versão dinâmica via CHANGELOG.md — atualiza #appVersion no header desktop
-(async () => {
+// Versão no header desktop — mesma FONTE ÚNICA do rodapé (APP_VERSION), sem fetch/cache
+(() => {
     const el = document.getElementById('appVersion');
-    if (!el) return;
-    const CACHE_KEY = 'mgc-financas_app_version';
-    const CACHE_TTL = 6 * 60 * 60 * 1000; // 6 horas
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    if (cached && Date.now() - cached.ts < CACHE_TTL) { el.textContent = ' · © MGC · ' + cached.v; return; }
-    try {
-        const res = await fetch('./CHANGELOG.md?_=' + Date.now(), { cache: 'no-cache' });
-        if (!res.ok) return;
-        const text = await res.text();
-        const match = text.match(/##\s+\[(\d+\.\d+\.\d+)\]/);
-        if (!match) return;
-        const v = 'v' + match[1];
-        el.textContent = ' · © MGC · ' + v;
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ v, ts: Date.now() }));
-    } catch(e) { /* offline — mantém valor do HTML */ }
+    if (el) el.textContent = ' · © MGC · v' + APP_VERSION;
 })();
 
 // Comparação de versão "x.y.z": 1 se a>b, -1 se a<b, 0 se iguais (robusto a 'v', partes faltando ou lixo)

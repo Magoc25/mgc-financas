@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas o MGC Finanças é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.10.1-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.10.2-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -94,6 +94,11 @@ Quando quiser sincronizar entre computadores ou acessar pelo celular, basta conf
 - Gráfico de **barras** — comparativo mensal de receitas vs despesas
 - Gráfico de **linha** — evolução do saldo ao longo dos meses
 - Modo claro e escuro nos gráficos
+
+### 🎯 Planejamento e fluxo de caixa
+- **Renda extra por mês** — lance receitas pontuais (restituição de IR, 13º salário, bônus) que contam **só no mês escolhido**, sem virar renda recorrente
+- **Trazer déficit do mês anterior** — um marcador por mês soma o déficit do mês anterior às despesas daquele mês (substitui o lançamento manual), refletindo em todos os cartões, gráficos e no saldo
+- **Planejamento de Quitação** — simulador que projeta o saldo mês a mês e mostra **em que mês você zera o déficit**; ajuste quanto economizar por mês e veja o resultado ao vivo, ou defina um mês-alvo e descubra quanto precisa guardar
 
 ### 📈 Investimentos (renda fixa)
 - **Simulador** de Poupança, CDB, LCI/LCA, Tesouro Selic e Tesouro IPCA+ com juros compostos, aportes mensais e **IR regressivo**
