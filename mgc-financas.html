@@ -873,6 +873,64 @@ on conflict (id) do nothing;</div>
     </div>
 </div>
 
+<!-- PLANEJAMENTO DE QUITAÇÃO (simulador de déficit) -->
+<div class="bg-white rounded-lg shadow-md overflow-hidden" id="planPanel">
+    <button onclick="togglePlanPanel()" class="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition">
+        <div class="flex items-center gap-2">
+            <span class="text-base font-semibold text-gray-800">🎯 Planejamento de Quitação</span>
+            <span id="planStatusChip" class="text-xs font-medium rounded px-2 py-0.5"></span>
+        </div>
+        <span id="planChevron" class="text-gray-400 text-sm transition-transform duration-200" style="transform:rotate(-90deg)">▼</span>
+    </button>
+    <div id="planPanelBody" class="px-5 pb-5 hidden">
+        <p class="text-xs text-gray-500 mb-4">Projeção mês a mês a partir dos seus lançamentos (renda, renda extra, despesas fixas, faturas e dívidas). Simule quanto economizar por mês e veja em que mês você zera o déficit.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dívida / déficit acumulado hoje</label>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-400">R$</span>
+                    <input id="planDividaInicial" type="number" min="0" step="50" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400" placeholder="0,00" onchange="planSetDivida(this.value)">
+                </div>
+                <button id="planEstimarBtn" onclick="planEstimarDivida()" class="mt-1 text-xs text-indigo-500 hover:text-indigo-700 underline"></button>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Economizar por mês <span class="text-gray-400 normal-case font-normal">— cortar gastos ou somar renda</span></label>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                        <span class="text-sm text-gray-400">R$</span>
+                        <input id="planEconomiaNum" type="number" min="0" step="50" class="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400" value="0" oninput="planSetEconomia(this.value, false)" onchange="planSetEconomia(this.value, true)">
+                    </div>
+                    <input id="planEconomiaRange" type="range" min="0" max="1000" step="10" value="0" class="flex-1 accent-indigo-600" oninput="planSetEconomia(this.value, false)" onchange="planSetEconomia(this.value, true)">
+                </div>
+            </div>
+        </div>
+
+        <div id="planResultado" class="rounded-lg p-4 mb-4 text-sm"></div>
+
+        <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
+            <span class="text-gray-500">Quero zerar até</span>
+            <select id="planTargetMes" class="px-2 py-1 text-sm border border-gray-300 rounded-lg outline-none bg-white" onchange="planCalcAlvo()"></select>
+            <span class="text-gray-400">→</span>
+            <span id="planTargetResult" class="font-semibold text-indigo-600"></span>
+        </div>
+
+        <div class="relative h-56 w-full overflow-x-auto mb-4">
+            <div style="min-width:640px;height:100%"><canvas id="planChart"></canvas></div>
+        </div>
+
+        <div>
+            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <h3 class="text-xs font-semibold text-gray-500 uppercase">Trazer déficit do mês anterior</h3>
+                <span class="text-[11px] text-gray-400">marque o mês para somar o déficit do mês anterior às despesas dele</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="text-xs w-full" id="planCarryTable"><tbody id="planCarryBody"></tbody></table>
+            </div>
+        </div>
+    </div>
+</div>
+
 </div><!-- /secInicio -->
 
 <!-- ── SECTION: GRÁFICOS ───────────────────────────────── -->
@@ -1321,7 +1379,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.9.3'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.10.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -1423,6 +1481,12 @@ function normalizarAppData(data) {
     if (!data.metas)      data.metas    = [];
     if (!data.historico)  data.historico = [];
     if (!data.pagamentos) data.pagamentos = {};
+    // Renda extra por mês + carry-forward do déficit + estado do simulador (v4.10.0)
+    if (!Array.isArray(data.rendasExtras))                        data.rendasExtras = [];
+    if (!data.carryForward || typeof data.carryForward !== 'object') data.carryForward = {};
+    if (!data.planejamento || typeof data.planejamento !== 'object') data.planejamento = {};
+    if (data.planejamento.economia == null)      data.planejamento.economia = 0;
+    if (data.planejamento.dividaInicial === undefined) data.planejamento.dividaInicial = null; // null = estimar dos lançamentos
     // Investimentos (módulo v4.5.0)
     if (!data.investimentos || typeof data.investimentos !== 'object') data.investimentos = {};
     if (!Array.isArray(data.investimentos.cenarios)) data.investimentos.cenarios = [];
@@ -1453,7 +1517,8 @@ function rebuildFormSelects() {
         cartoes.map(c => `<option value="${esc(c)}">Cartão: ${esc(c)}</option>`).join('') +
         `<option value="Fixa">Despesa Fixa (Recorrente)</option>
          <option value="Divida">Dívida Extra / Cheque Especial</option>
-         <option value="Renda">Renda / Receita</option>`;
+         <option value="Renda">Renda / Receita (Recorrente)</option>
+         <option value="RendaExtra">Renda Extra (mês específico)</option>`;
     if ([...newType.options].some(o => o.value === prevType)) newType.value = prevType;
 
     // filterCard
@@ -1547,6 +1612,7 @@ function editarItem(tipo, index) {
     const data = tipo === 'fatura' ? appData.faturas[index]
                : tipo === 'fixa'   ? appData.fixas[index]
                : tipo === 'divida' ? appData.dividas[index]
+               : tipo === 'rendaExtra' ? appData.rendasExtras[index]
                : appData.rendas[index];
 
     document.getElementById('editTipo').value  = tipo;
@@ -1555,7 +1621,7 @@ function editarItem(tipo, index) {
     document.getElementById('editValor').value = data.amount;
 
     const showParcelas = tipo === 'fatura';
-    const showMes      = tipo === 'fatura' || tipo === 'divida';
+    const showMes      = tipo === 'fatura' || tipo === 'divida' || tipo === 'rendaExtra';
     const showCat      = tipo === 'fatura';
 
     document.getElementById('editParcelasRow').style.display  = showParcelas ? '' : 'none';
@@ -1563,7 +1629,7 @@ function editarItem(tipo, index) {
     document.getElementById('editCategoriaRow').style.display = showCat      ? '' : 'none';
 
     if (showParcelas) { document.getElementById('editCurr').value = data.curr; document.getElementById('editTotal').value = data.total; }
-    if (showMes) document.getElementById('editMes').value = data.mesInicio || monthNames[HISTORY_COUNT];
+    if (showMes) document.getElementById('editMes').value = (tipo === 'rendaExtra' ? data.mes : data.mesInicio) || monthNames[HISTORY_COUNT];
     if (showCat) document.getElementById('editCategoria').value = data.category || 'Outros';
 
     document.getElementById('editModal').classList.remove('hidden');
@@ -1585,6 +1651,7 @@ document.getElementById('editSaveBtn').onclick = () => {
 
     if (tipo === 'fixa')  appData.fixas[index]  = { ...appData.fixas[index],  name: nome, amount: valor };
     else if (tipo === 'renda')  appData.rendas[index] = { ...appData.rendas[index], name: nome, amount: valor };
+    else if (tipo === 'rendaExtra') appData.rendasExtras[index] = { ...appData.rendasExtras[index], name: nome, amount: valor, mes: document.getElementById('editMes').value };
     else if (tipo === 'divida') appData.dividas[index] = { ...appData.dividas[index], name: nome, amount: valor, mesInicio: document.getElementById('editMes').value };
     else if (tipo === 'fatura') {
         const curr  = parseInt(document.getElementById('editCurr').value);
@@ -1870,6 +1937,9 @@ function exportarCSV() {
     csv += 'RENDAS\nNome,Valor\n';
     appData.rendas.forEach(r => { csv += `${escape(r.name)},${r.amount}\n`; });
 
+    csv += '\nRENDAS EXTRAS (por mês)\nNome,Valor,Mês\n';
+    appData.rendasExtras.forEach(r => { csv += `${escape(r.name)},${r.amount},${r.mes || ''}\n`; });
+
     csv += '\nDESPESAS FIXAS\nNome,Valor\n';
     appData.fixas.forEach(f => { csv += `${escape(f.name)},${f.amount}\n`; });
 
@@ -1892,7 +1962,7 @@ function exportarCSV() {
 
 function validarBackup(obj) {
     if (!obj || typeof obj !== 'object') return 'Arquivo não é um objeto JSON válido.';
-    const arrays = ['faturas', 'fixas', 'dividas', 'rendas'];
+    const arrays = ['faturas', 'fixas', 'dividas', 'rendas', 'rendasExtras'];
     for (const key of arrays) {
         if (obj[key] !== undefined && !Array.isArray(obj[key]))
             return `Campo "${key}" deveria ser uma lista.`;
@@ -1905,7 +1975,7 @@ function validarBackup(obj) {
             return 'Um ou mais lançamentos de cartão têm parcelas inválidas.';
     }
     // Spot-check fixa/renda/divida items
-    for (const arr of ['fixas', 'rendas', 'dividas']) {
+    for (const arr of ['fixas', 'rendas', 'dividas', 'rendasExtras']) {
         for (const item of (obj[arr] || [])) {
             if (typeof item.name !== 'string' || typeof item.amount !== 'number')
                 return `Um item em "${arr}" tem formato inválido.`;
@@ -1943,6 +2013,7 @@ function removerItem(tipo, index) {
     if (tipo === 'fixa')        removed = appData.fixas.splice(index, 1)[0];
     else if (tipo === 'divida') removed = appData.dividas.splice(index, 1)[0];
     else if (tipo === 'renda')  removed = appData.rendas.splice(index, 1)[0];
+    else if (tipo === 'rendaExtra') removed = appData.rendasExtras.splice(index, 1)[0];
     else if (tipo === 'fatura') removed = appData.faturas.splice(index, 1)[0];
     if (!removed) return;
 
@@ -1975,6 +2046,7 @@ function desfazerRemocao() {
     if (tipo === 'fixa')        appData.fixas.splice(index, 0, item);
     else if (tipo === 'divida') appData.dividas.splice(index, 0, item);
     else if (tipo === 'renda')  appData.rendas.splice(index, 0, item);
+    else if (tipo === 'rendaExtra') appData.rendasExtras.splice(index, 0, item);
     else if (tipo === 'fatura') appData.faturas.splice(index, 0, item);
     salvarDados(); processarDadosERenderizar();
     if (_lastUndoToast) { clearTimeout(_lastUndoToast._t); _lastUndoToast.classList.remove('show'); setTimeout(() => _lastUndoToast && _lastUndoToast.remove(), 350); _lastUndoToast = null; }
@@ -1986,12 +2058,14 @@ function duplicarItem(tipo, index) {
     if (tipo === 'fixa')        copia = { ...appData.fixas[index] };
     else if (tipo === 'divida') copia = { ...appData.dividas[index] };
     else if (tipo === 'renda')  copia = { ...appData.rendas[index] };
+    else if (tipo === 'rendaExtra') copia = { ...appData.rendasExtras[index] };
     else if (tipo === 'fatura') copia = { ...appData.faturas[index] };
     if (!copia) return;
     copia.name = copia.name + ' (cópia)';
     if (tipo === 'fixa')        appData.fixas.push(copia);
     else if (tipo === 'divida') appData.dividas.push(copia);
     else if (tipo === 'renda')  appData.rendas.push(copia);
+    else if (tipo === 'rendaExtra') appData.rendasExtras.push(copia);
     else if (tipo === 'fatura') appData.faturas.push(copia);
     logHistorico('dup', tipo, copia.name, copia.amount);
     salvarDados(); processarDadosERenderizar();
@@ -2008,7 +2082,7 @@ function toggleFormFields() {
     show('divNewCurr',     isCard);
     show('divNewTotal',    isCard);
     show('divNewCategory', isCard);
-    show('divNewMonth',    isCard || tipo === 'Divida');
+    show('divNewMonth',    isCard || tipo === 'Divida' || tipo === 'RendaExtra');
     if (!isCard) { document.getElementById('newCurr').value = 1; document.getElementById('newTotal').value = 1; }
 }
 
@@ -2033,6 +2107,8 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
         appData.fixas.push({ name: nome, amount: valor });
     } else if (tipo === 'Renda') {
         appData.rendas.push({ name: nome, amount: valor });
+    } else if (tipo === 'RendaExtra') {
+        appData.rendasExtras.push({ name: nome, amount: valor, mes });
     } else if (tipo === 'Divida') {
         appData.dividas.push({ name: nome, amount: valor, mesInicio: mes });
     } else if (isCard) {
@@ -2042,7 +2118,8 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
         appData.faturas.push({ card: tipo, name: nome, category: categoria, amount: valor, curr, total, mesInicio: mes });
     }
 
-    logHistorico('add', tipo === 'Fixa' ? 'fixa' : tipo === 'Renda' ? 'renda' : tipo === 'Divida' ? 'divida' : 'fatura', nome, valor);
+    const _tipoHist = tipo === 'Fixa' ? 'fixa' : tipo === 'Renda' ? 'renda' : tipo === 'RendaExtra' ? 'rendaExtra' : tipo === 'Divida' ? 'divida' : 'fatura';
+    logHistorico('add', _tipoHist, nome, valor);
     trackFormUsage(tipo, isCard ? categoria : null);
     salvarDados();
     this.reset();
@@ -2242,7 +2319,38 @@ let chartInstance    = null;
 let pieChartInstance = null;
 let TOTAL_FIXED      = 0;
 let RENDA_MENSAL     = 0;
+// Séries mensais compartilhadas (dashboard, fluxo de caixa, simulador) — v4.10.0
+let _rendaExtraArr   = [];  // renda extra por mês (índice = mês)
+let _saldoBaseArr    = [];  // saldo do mês sem carry-forward (renda+extra − fixas − faturas − dívidas)
+let _carriedInArr    = [];  // déficit trazido do mês anterior (quando o mês está marcado)
+let _saldoAdjArr     = [];  // saldo do mês já com o carry-forward aplicado
 const _prevVals      = {};
+
+// Recalcula as séries mensais a partir de processedData + appData (chamar após montar processedData)
+function _recomputeSeries() {
+    _rendaExtraArr = new Array(visibleMonths).fill(0);
+    (appData.rendasExtras || []).forEach(r => {
+        const i = monthNames.indexOf(r.mes);
+        if (i >= 0) _rendaExtraArr[i] += r.amount;
+    });
+    const faturasAll = new Array(visibleMonths).fill(0);
+    processedData.forEach(item => item.projections.forEach((v, i) => { faturasAll[i] += v; }));
+    const dividasAll = new Array(visibleMonths).fill(0);
+    (appData.dividas || []).forEach(d => {
+        const i = d.mesInicio ? monthNames.indexOf(d.mesInicio) : 0;
+        if (i >= 0 && i < visibleMonths) dividasAll[i] += d.amount;
+    });
+    _saldoBaseArr = monthNames.map((_, i) =>
+        (RENDA_MENSAL + _rendaExtraArr[i]) - (TOTAL_FIXED + faturasAll[i] + dividasAll[i]));
+    // Carry-forward: só o mês MARCADO puxa o déficit do anterior (sem cascata automática).
+    _carriedInArr = new Array(visibleMonths).fill(0);
+    _saldoAdjArr  = new Array(visibleMonths).fill(0);
+    for (let i = 0; i < visibleMonths; i++) {
+        const carry = (i > 0 && appData.carryForward[monthNames[i]]) ? Math.max(0, -_saldoAdjArr[i - 1]) : 0;
+        _carriedInArr[i] = carry;
+        _saldoAdjArr[i]  = _saldoBaseArr[i] - carry;
+    }
+}
 
 function animateKpi(id, newVal) {
     const el = document.getElementById(id);
@@ -2297,6 +2405,8 @@ function processarDadosERenderizar() {
         return { ...item, category: item.category || 'Outros', projections, totalItemDebt, originalIndex: idx };
     });
 
+    _recomputeSeries();
+
     // Rebuild filterStore with active categories
     const activeCats = [...new Set(processedData.map(i => i.category))];
     const fs = document.getElementById('filterStore');
@@ -2328,6 +2438,21 @@ function processarDadosERenderizar() {
                 <button onclick="removerItem('renda',${item._i})" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
             </td></tr>`;
     });
+    // Renda extra (por mês) — listada abaixo das recorrentes, com selo do mês
+    const _extras = appData.rendasExtras.map((item, i) => ({ ...item, _i: i }));
+    if (_extras.length) {
+        rendasHTML += `<tr><td colspan="3" class="px-2 pt-3 pb-1 text-[10px] font-semibold text-teal-500 uppercase tracking-wider">Renda extra (mês específico)</td></tr>`;
+        _extras.forEach(item => {
+            rendasHTML += `<tr class="hover:bg-gray-50 text-gray-700">
+                <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)} <span class="text-xs text-teal-500">(${esc(item.mes || '—')})</span></td>
+                <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-teal-600">${formatCurrency(item.amount)}</td>
+                <td class="px-1 py-2 text-center w-16">
+                    <button onclick="editarItem('rendaExtra',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
+                    <button onclick="duplicarItem('rendaExtra',${item._i})" class="action-btn text-green-400 hover:text-green-700" title="Duplicar">⧉</button>
+                    <button onclick="removerItem('rendaExtra',${item._i})" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
+                </td></tr>`;
+        });
+    }
     if (!rendasHTML) rendasHTML = `<tr><td colspan="3" class="px-2 py-3 text-center text-gray-400 text-xs italic">Nenhuma renda cadastrada</td></tr>`;
     document.getElementById('rendasBody').innerHTML = rendasHTML;
     document.getElementById('rendasTotal').textContent = formatCurrency(RENDA_MENSAL);
@@ -2416,9 +2541,15 @@ function renderDashboard() {
     document.getElementById('maiorGastoValue').textContent  = maxCatValue > 0 ? maxCatName : '-';
     document.getElementById('maiorGastoAmount').textContent = maxCatValue > 0 ? formatCurrency(maxCatValue) : 'R$ 0,00';
 
+    // Renda extra e déficit trazido do mês anterior (v4.10.0)
+    const rendaExtraMes = _rendaExtraArr[actualMonthIndexForCalc] || 0;
+    const carriedMes    = _carriedInArr[actualMonthIndexForCalc] || 0;
+    const rendaComExtra = RENDA_MENSAL + rendaExtraMes;
+
     // Comprometimento
     const totalSaidasMes = TOTAL_FIXED + valorFaturaRef + valorDividaRef;
-    let perc = RENDA_MENSAL > 0 ? (totalSaidasMes / RENDA_MENSAL) * 100 : (totalSaidasMes > 0 ? 100 : 0);
+    const saidasComCarry = totalSaidasMes + carriedMes;
+    let perc = rendaComExtra > 0 ? (saidasComCarry / rendaComExtra) * 100 : (saidasComCarry > 0 ? 100 : 0);
     const percText = document.getElementById('percComprometido');
     const percBar  = document.getElementById('barComprometido');
     const cardComp = document.getElementById('cardBorderComprometimento');
@@ -2430,8 +2561,8 @@ function renderDashboard() {
     else if (perc <= 100) { percText.className = 'text-xl lg:text-2xl font-bold text-orange-600'; percBar.className = 'h-2.5 rounded-full bg-orange-500'; cardComp.className = 'bg-white p-5 rounded-lg shadow-md border-l-4 border-orange-500'; }
     else                  { percText.className = 'text-xl lg:text-2xl font-bold text-red-600';    percBar.className = 'h-2.5 rounded-full bg-red-600';    cardComp.className = 'bg-white p-5 rounded-lg shadow-md border-l-4 border-red-600'; }
 
-    // Saldo
-    const saldo = RENDA_MENSAL - totalSaidasMes;
+    // Saldo (já com renda extra do mês e o déficit trazido do mês anterior)
+    const saldo = rendaComExtra - saidasComCarry;
     animateKpi('totalCardSaldo', saldo);
     const saldoEl   = document.getElementById('totalCardSaldo');
     const saldoCard = document.getElementById('cardBorderSaldo');
@@ -2462,7 +2593,7 @@ function renderDashboard() {
     renderCategoryTrendChart(monthlyDividasTotals);
     renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef);
     renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals);
-    renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc);
+    renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc, rendaExtraMes, carriedMes);
 
     // Tables
     renderDividasTable(selectedMonthIndex);
@@ -2470,6 +2601,9 @@ function renderDashboard() {
 
     // Pagamentos
     renderPagamentos();
+
+    // Planejamento de quitação (simulador)
+    renderPlanejamento();
 }
 
 function renderAlertBanner(categoryTotals, mesRef) {
@@ -2504,7 +2638,7 @@ function renderBarChart(monthlyFaturasTotals, monthlyDividasTotals) {
         data: {
             labels: monthNames,
             datasets: [
-                { type: 'line', label: 'Renda Mensal', data: new Array(visibleMonths).fill(RENDA_MENSAL), borderColor: 'rgba(16,185,129,1)', borderWidth: 2, borderDash: [5,5], pointRadius: 0, fill: false },
+                { type: 'line', label: 'Renda Mensal', data: monthNames.map((_, i) => RENDA_MENSAL + (_rendaExtraArr[i] || 0)), borderColor: 'rgba(16,185,129,1)', borderWidth: 2, borderDash: [5,5], pointRadius: 0, fill: false },
                 { type: 'bar',  label: 'Dívidas / Cheque', data: monthlyDividasTotals, backgroundColor: 'rgba(220,38,38,0.8)', borderColor: 'rgba(185,28,28,1)', borderWidth: 1 },
                 { type: 'bar',  label: 'Faturas (Cartão)', data: monthlyFaturasTotals, backgroundColor: 'rgba(59,130,246,0.8)', borderColor: 'rgba(37,99,235,1)', borderWidth: 1 },
                 { type: 'bar',  label: 'Despesas Fixas', data: new Array(visibleMonths).fill(TOTAL_FIXED), backgroundColor: 'rgba(249,115,22,0.8)', borderColor: 'rgba(234,88,12,1)', borderWidth: 1, borderRadius: { topLeft: 4, topRight: 4 } }
@@ -2574,25 +2708,27 @@ function exportarGrafico(canvasId, filename) {
     toast('Gráfico salvo como PNG!', 'success');
 }
 
-function renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc) {
+function renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc, rendaExtraMes = 0, carriedMes = 0) {
     const box  = document.getElementById('narrativeBox');
     const text = document.getElementById('narrativeText');
 
-    if (RENDA_MENSAL === 0 && totalSaidasMes === 0) { box.classList.add('hidden'); return; }
+    const rendaComExtra = RENDA_MENSAL + rendaExtraMes;
+    if (rendaComExtra === 0 && totalSaidasMes === 0 && carriedMes === 0) { box.classList.add('hidden'); return; }
     box.classList.remove('hidden');
 
     const percFmt   = perc.toFixed(1).replace('.', ',');
     const saldoFmt  = formatCurrency(Math.abs(saldo));
-    const rendaFmt  = formatCurrency(RENDA_MENSAL);
-    const totalFmt  = formatCurrency(totalSaidasMes);
+    const rendaFmt  = formatCurrency(rendaComExtra);
+    const totalFmt  = formatCurrency(totalSaidasMes + carriedMes);
     const negativo  = saldo < 0;
 
     box.className = `narrative-box${negativo ? ' negative' : ''}`;
 
     let partes = [];
 
-    if (RENDA_MENSAL > 0) {
-        partes.push(`Em <strong>${mesRef}</strong>, sua renda é <strong>${rendaFmt}</strong> e os gastos totais chegam a <strong>${totalFmt}</strong> (${percFmt}% comprometido).`);
+    if (rendaComExtra > 0) {
+        const extraNota = rendaExtraMes > 0 ? ` (inclui <strong>${formatCurrency(rendaExtraMes)}</strong> de renda extra)` : '';
+        partes.push(`Em <strong>${mesRef}</strong>, sua renda é <strong>${rendaFmt}</strong>${extraNota} e os gastos totais chegam a <strong>${totalFmt}</strong> (${percFmt}% comprometido).`);
     } else {
         partes.push(`Em <strong>${mesRef}</strong>, os gastos totais chegam a <strong>${totalFmt}</strong>.`);
     }
@@ -2605,10 +2741,14 @@ function renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef,
         partes.push(`Há <strong>${formatCurrency(valorDividaRef)}</strong> em dívidas/cheque especial neste mês.`);
     }
 
+    if (carriedMes > 0) {
+        partes.push(`↪ Inclui <strong>${formatCurrency(carriedMes)}</strong> de déficit trazido do mês anterior.`);
+    }
+
     if (negativo) {
-        partes.push(`⚠️ <strong>Atenção: saldo negativo de ${saldoFmt}.</strong> Considere reduzir gastos ou aumentar a renda.`);
+        partes.push(`⚠️ <strong>Atenção: saldo negativo de ${saldoFmt}.</strong> Use o <strong>Planejamento de Quitação</strong> abaixo para simular quando você regulariza.`);
     } else if (saldo > 0) {
-        const poupPct = RENDA_MENSAL > 0 ? ((saldo / RENDA_MENSAL) * 100).toFixed(0) : 0;
+        const poupPct = rendaComExtra > 0 ? ((saldo / rendaComExtra) * 100).toFixed(0) : 0;
         partes.push(`✅ Saldo positivo de <strong>${saldoFmt}</strong> (${poupPct}% da renda disponível para poupança).`);
     }
 
@@ -2736,13 +2876,21 @@ function renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals) {
         ${monthNames.map((m, i) => `<th class="cashflow-cell text-gray-500 font-medium">${m}</th>`).join('')}
     </tr>`;
 
+    const temExtra = _rendaExtraArr.some(v => v > 0);
+    const temCarry = _carriedInArr.some(v => v > 0);
     const rows = [
-        { label: 'Renda',         data: monthNames.map(() => RENDA_MENSAL), cls: 'text-emerald-700' },
+        { label: 'Renda',         data: monthNames.map((_, i) => RENDA_MENSAL + (_rendaExtraArr[i] || 0)), cls: 'text-emerald-700' },
+    ];
+    if (temExtra) rows.push({ label: '↳ Renda Extra', data: _rendaExtraArr.slice(), cls: 'text-teal-600' });
+    rows.push(
         { label: 'Desp. Fixas',   data: monthNames.map(() => TOTAL_FIXED),  cls: 'text-orange-600' },
         { label: 'Faturas',       data: monthlyFaturasTotals,               cls: 'text-blue-600' },
-        { label: 'Dívidas',       data: monthlyDividasTotals,               cls: 'text-red-600' },
-        { label: 'Saldo',         data: monthNames.map((_, i) => RENDA_MENSAL - TOTAL_FIXED - monthlyFaturasTotals[i] - monthlyDividasTotals[i]), cls: '' }
-    ];
+        { label: 'Dívidas',       data: monthlyDividasTotals,               cls: 'text-red-600' }
+    );
+    if (temCarry) rows.push({ label: '↪ Déficit anterior', data: _carriedInArr.slice(), cls: 'text-red-500' });
+    rows.push(
+        { label: 'Saldo', data: monthNames.map((_, i) => (RENDA_MENSAL + (_rendaExtraArr[i] || 0)) - TOTAL_FIXED - monthlyFaturasTotals[i] - monthlyDividasTotals[i] - (_carriedInArr[i] || 0)), cls: '' }
+    );
 
     body.innerHTML = rows.map((row, ri) => {
         const isLast = ri === rows.length - 1;
@@ -2879,6 +3027,213 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
 }
 
 // ============================================================
+// PLANEJAMENTO DE QUITAÇÃO — simulador de déficit (v4.10.0)
+// ============================================================
+let _planPanelOpen   = false;
+let planChartInstance = null;
+
+function togglePlanPanel() {
+    _planPanelOpen = !_planPanelOpen;
+    document.getElementById('planPanelBody').classList.toggle('hidden', !_planPanelOpen);
+    document.getElementById('planChevron').style.transform = _planPanelOpen ? '' : 'rotate(-90deg)';
+    if (_planPanelOpen) renderPlanejamento();
+}
+
+// Déficit acumulado estimado a partir dos meses JÁ transcorridos (saldo base negativo somado)
+function _planEstimativaDivida() {
+    let past = 0;
+    for (let i = 0; i < HISTORY_COUNT; i++) past += (_saldoBaseArr[i] || 0);
+    return Math.max(0, -past);
+}
+// Dívida inicial efetiva: valor manual do usuário, ou a estimativa quando não definido
+function _planStartDebt() {
+    const dv = appData.planejamento.dividaInicial;
+    return (dv != null) ? Math.max(0, dv) : _planEstimativaDivida();
+}
+
+// Projeta o saldo acumulado do mês atual em diante, aplicando a economia mensal
+function planCompute(economia) {
+    const now = HISTORY_COUNT;
+    const startDebt = _planStartDebt();
+    let bal = -startDebt;
+    const points = [];
+    let regIdx = (bal >= 0) ? now : -1;
+    for (let i = now; i < visibleMonths; i++) {
+        bal += (_saldoBaseArr[i] || 0) + economia;
+        points.push({ i, label: monthNames[i], bal });
+        if (regIdx === -1 && bal >= 0) regIdx = i;
+    }
+    return { startDebt, points, regIdx, now };
+}
+
+function _planDrawChart(r) {
+    const cv = document.getElementById('planChart');
+    if (!cv) return;
+    if (planChartInstance) planChartInstance.destroy();
+    const txt = chartTextColor(), grid = chartGridColor();
+    planChartInstance = new Chart(cv.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: r.points.map(p => p.label),
+            datasets: [{
+                label: 'Saldo acumulado', data: r.points.map(p => Math.round(p.bal)),
+                borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.10)',
+                borderWidth: 2, pointRadius: 2, tension: 0.25, fill: true,
+                segment: { borderColor: c => (c.p1.parsed.y < 0 ? '#ef4444' : '#22c55e') }
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + formatCurrency(c.raw) } } },
+            scales: {
+                x: { ticks: { color: txt, font: { size: 10 } }, grid: { color: grid } },
+                y: { ticks: { color: txt, callback: v => 'R$' + (v / 1000).toFixed(1) + 'k' }, grid: { color: grid } }
+            }
+        }
+    });
+}
+
+// Atualiza caixa de resultado + selo do cabeçalho (+ gráfico se aberto) — não mexe nos inputs
+function _planUpdateResultado() {
+    _fmtCtx = 'contas';
+    const economia = appData.planejamento.economia || 0;
+    const r = planCompute(economia);
+    const resEl = document.getElementById('planResultado');
+    const chip  = document.getElementById('planStatusChip');
+    if (!resEl || !chip) return;
+    const now = r.now;
+
+    if (r.startDebt <= 0 && r.regIdx === now) {
+        resEl.className = 'rounded-lg p-4 mb-4 text-sm bg-emerald-50 text-emerald-800 border border-emerald-200';
+        resEl.innerHTML = `✅ Você não tem déficit acumulado — está no azul.${economia > 0 ? ` Guardando <strong>${formatCurrency(economia)}/mês</strong>, sua reserva cresce.` : ''}`;
+        chip.textContent = 'Sem déficit';
+        chip.className = 'text-xs font-medium rounded px-2 py-0.5 text-emerald-600 bg-emerald-50';
+    } else if (r.regIdx !== -1) {
+        const meses = r.regIdx - now + 1;
+        resEl.className = 'rounded-lg p-4 mb-4 text-sm bg-indigo-50 text-indigo-900 border border-indigo-200';
+        resEl.innerHTML = `Partindo de <strong>${formatCurrency(r.startDebt)}</strong> de déficit, economizando <strong>${formatCurrency(economia)}/mês</strong> você <strong>regulariza em ${monthNames[r.regIdx]}</strong> — em ${meses} ${meses === 1 ? 'mês' : 'meses'}.`;
+        chip.textContent = 'Regulariza em ' + monthNames[r.regIdx];
+        chip.className = 'text-xs font-medium rounded px-2 py-0.5 text-indigo-600 bg-indigo-50';
+    } else {
+        resEl.className = 'rounded-lg p-4 mb-4 text-sm bg-red-50 text-red-800 border border-red-200';
+        resEl.innerHTML = `Partindo de <strong>${formatCurrency(r.startDebt)}</strong> de déficit e economizando <strong>${formatCurrency(economia)}/mês</strong>, o déficit <strong>não zera</strong> nos próximos ${visibleMonths - now} meses. Aumente a economia mensal.`;
+        chip.textContent = 'Não regulariza';
+        chip.className = 'text-xs font-medium rounded px-2 py-0.5 text-red-600 bg-red-50';
+    }
+    if (_planPanelOpen) _planDrawChart(r);
+}
+
+// Slider/campo de economia — sync sem atrapalhar o controle em edição; salva só no 'change'
+function planSetEconomia(val, save) {
+    const v = Math.max(0, parseFloat(val) || 0);
+    appData.planejamento.economia = v;
+    const numEl = document.getElementById('planEconomiaNum');
+    const rngEl = document.getElementById('planEconomiaRange');
+    if (rngEl && parseFloat(rngEl.max) < v) rngEl.max = Math.ceil(v / 50) * 50;
+    if (numEl && document.activeElement !== numEl) numEl.value = v;
+    if (rngEl && document.activeElement !== rngEl) rngEl.value = Math.min(v, parseFloat(rngEl.max));
+    _planUpdateResultado();
+    if (save) salvarDados();
+}
+
+function planSetDivida(val) {
+    const t = String(val).trim();
+    appData.planejamento.dividaInicial = (t === '') ? null : Math.max(0, parseFloat(t) || 0);
+    salvarDados();
+    renderPlanejamento();
+}
+
+function planEstimarDivida() {
+    appData.planejamento.dividaInicial = _planEstimativaDivida();
+    salvarDados();
+    renderPlanejamento();
+}
+
+// Marca/desmarca o carry-forward de um mês (sem cascata: só o mês marcado puxa o anterior)
+function planToggleCarry(mes) {
+    if (appData.carryForward[mes]) delete appData.carryForward[mes];
+    else appData.carryForward[mes] = true;
+    salvarDados();
+    processarDadosERenderizar();
+}
+
+// Inverso: quanto economizar por mês para zerar até o mês-alvo escolhido
+function planCalcAlvo() {
+    const sel = document.getElementById('planTargetMes');
+    const out = document.getElementById('planTargetResult');
+    if (!sel || !out) return;
+    const iAlvo = monthNames.indexOf(sel.value);
+    const now = HISTORY_COUNT;
+    if (iAlvo < now) { out.textContent = ''; return; }
+    let sumSaldo = 0;
+    for (let i = now; i <= iAlvo; i++) sumSaldo += (_saldoBaseArr[i] || 0);
+    const count = iAlvo - now + 1;
+    let z = Math.max(0, Math.ceil(((_planStartDebt() - sumSaldo) / count) / 10) * 10);
+    out.textContent = z <= 0 ? 'já dá certo sem economizar nada 🎉' : `economize ${formatCurrency(z)}/mês`;
+}
+
+function renderPlanejamento() {
+    _fmtCtx = 'contas';
+    _planUpdateResultado(); // resultado + selo (sempre; gráfico só se aberto)
+    if (!_planPanelOpen) return;
+
+    // Dívida inicial + botão de estimativa
+    const dvEl = document.getElementById('planDividaInicial');
+    const est  = _planEstimativaDivida();
+    if (dvEl && document.activeElement !== dvEl) {
+        dvEl.value = (appData.planejamento.dividaInicial != null) ? appData.planejamento.dividaInicial : '';
+        dvEl.placeholder = est > 0 ? est.toFixed(2) : '0,00';
+    }
+    const eb = document.getElementById('planEstimarBtn');
+    if (eb) eb.textContent = `↺ Estimar pelos meses anteriores (${formatCurrency(est)})`;
+
+    // Economia (campo + slider)
+    const eco   = appData.planejamento.economia || 0;
+    const numEl = document.getElementById('planEconomiaNum');
+    const rngEl = document.getElementById('planEconomiaRange');
+    const rmax  = Math.max(1000, Math.ceil((_planStartDebt() / 3) / 50) * 50, eco);
+    if (rngEl) rngEl.max = rmax;
+    if (numEl && document.activeElement !== numEl) numEl.value = eco;
+    if (rngEl && document.activeElement !== rngEl) rngEl.value = Math.min(eco, rmax);
+
+    // Select do mês-alvo (preenche uma vez)
+    const tsel = document.getElementById('planTargetMes');
+    if (tsel && tsel.options.length === 0) {
+        let opts = '';
+        for (let i = HISTORY_COUNT + 1; i < visibleMonths; i++) opts += `<option value="${monthNames[i]}">${monthNames[i]}</option>`;
+        tsel.innerHTML = opts;
+    }
+    planCalcAlvo();
+
+    // Lista mês a mês com o check de carry-forward (12 meses a partir do atual)
+    let carryHtml = `<tr class="text-[10px] text-gray-400 uppercase border-b border-gray-100">
+        <td class="py-1 pr-2 text-left">Mês</td>
+        <td class="py-1 px-2 text-right">Saldo</td>
+        <td class="py-1 px-2 text-center">Trazer déficit</td>
+        <td class="py-1 pl-2 text-right">Saldo ajust.</td></tr>`;
+    for (let i = HISTORY_COUNT; i < Math.min(visibleMonths, HISTORY_COUNT + 12); i++) {
+        const base = _saldoBaseArr[i] || 0;
+        const adj  = _saldoAdjArr[i] || 0;
+        const checked   = !!appData.carryForward[monthNames[i]];
+        const prevLabel = i > 0 ? monthNames[i - 1] : '—';
+        const baseCls = base < 0 ? 'text-red-600' : 'text-emerald-600';
+        const adjCls  = adj  < 0 ? 'text-red-600' : 'text-emerald-600';
+        carryHtml += `<tr class="border-b border-gray-50">
+            <td class="py-1.5 pr-2 font-medium text-gray-600 whitespace-nowrap">${monthNames[i]}</td>
+            <td class="py-1.5 px-2 text-right ${baseCls} whitespace-nowrap">${formatCurrency(base)}</td>
+            <td class="py-1.5 px-2 text-center">
+                <label class="inline-flex items-center gap-1 cursor-pointer" title="Somar o déficit de ${prevLabel} às despesas de ${monthNames[i]}">
+                    <input type="checkbox" ${checked ? 'checked' : ''} onchange="planToggleCarry('${monthNames[i]}')">
+                    <span class="text-[11px] text-gray-400">de ${prevLabel}</span>
+                </label>
+            </td>
+            <td class="py-1.5 pl-2 text-right ${adjCls} whitespace-nowrap">${formatCurrency(adj)}</td>
+        </tr>`;
+    }
+    document.getElementById('planCarryBody').innerHTML = carryHtml;
+}
+
+// ============================================================
 // BLOCO 4 — PIN, HISTÓRICO, VALIDAÇÃO
 // ============================================================
 
@@ -2944,7 +3299,7 @@ function removerPin() {
 
 // ── HISTÓRICO ──────────────────────────────────────────────
 const HIST_MAX = 150;
-const TIPO_LABEL = { fatura:'Cartão', fixa:'Fixa', divida:'Dívida', renda:'Renda' };
+const TIPO_LABEL = { fatura:'Cartão', fixa:'Fixa', divida:'Dívida', renda:'Renda', rendaExtra:'Renda Extra' };
 const ACAO_CLASS  = { add:'hist-add', edit:'hist-edit', remove:'hist-remove', dup:'hist-dup' };
 const ACAO_LABEL  = { add:'Adicionado', edit:'Editado', remove:'Removido', dup:'Duplicado' };
 

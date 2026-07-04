@@ -5,6 +5,23 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.10.0] — Julho 2026
+
+### 🆕 Adicionado
+- **🎯 Planejamento de Quitação (simulador de déficit)** — novo painel na aba Início que projeta seu saldo mês a mês (renda, renda extra, despesas fixas, faturas e dívidas) e mostra **em que mês você zera o déficit**. Inclui:
+  - Campo **"Dívida / déficit acumulado hoje"** editável, com botão para **estimar** a partir dos meses já lançados
+  - Controle **"Economizar por mês"** (campo + barra deslizante) que **recalcula ao vivo** o mês de regularização
+  - Simulação inversa: escolha o mês-alvo e veja **quanto precisa economizar por mês** para zerar até lá
+  - Gráfico do **saldo acumulado** cruzando o zero (vermelho no negativo, verde no positivo)
+- **Renda Extra por mês** — novo tipo de lançamento para receitas pontuais (restituição de IR, 13º salário, bônus…), somadas **apenas no mês escolhido**, sem virar renda recorrente. Aparecem na tabela de Rendas com o selo do mês e entram no saldo, no gráfico e no fluxo de caixa.
+- **Trazer déficit do mês anterior** — no painel de Planejamento, um **check por mês** soma o déficit do mês anterior às despesas daquele mês (substitui o lançamento manual). Fica salvo por mês e **não aplica em cascata**: só o mês marcado puxa o anterior.
+
+### 🔧 Melhorado
+- Narrativa de saúde financeira agora menciona **renda extra** e **déficit trazido**, e aponta para o simulador quando o mês está negativo
+- Fluxo de caixa mensal ganhou linhas de **Renda Extra** e **↪ Déficit anterior** quando aplicáveis
+
+---
+
 ## [4.9.3] — Junho 2026
 
 ### 🆕 Adicionado
