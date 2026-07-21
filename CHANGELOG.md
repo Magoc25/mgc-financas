@@ -5,6 +5,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.11.0] — Julho 2026
+
+### 🆕 Adicionado
+- **Preenchimento automático no campo Descrição** de "Adicionar Novo Lançamento" (e na edição de itens) — conforme você digita, sugere descrições já usadas, como no navegador. O histórico é **salvo no Supabase**, então as sugestões acompanham você em qualquer dispositivo compartilhado.
+
+### 🔧 Melhorado
+- **Editar a categoria de um item nas Faturas de Cartão** — o modal de edição em "Detalhamento Faturas de Cartão" agora deixa trocar a **Categoria** (além de descrição e valor), corrigindo lançamentos feitos na categoria errada sem precisar apagar e recriar. Os campos **Parcelas** e **Mês de início** também voltaram a aparecer na edição.
+
+### 🐛 Correções
+- **Categorias e cartões novos agora aparecem no formulário após sincronizar** — antes, ao fechar e reabrir o app (ou em outro aparelho compartilhado), as categorias criadas em "Categorias & Cartões" sumiam do seletor de "Adicionar Novo Lançamento", porque as listas do formulário não eram recarregadas depois do carregamento do Supabase.
+
+---
+
 ## [4.10.3] — Julho 2026
 
 ### 🔧 Melhorado

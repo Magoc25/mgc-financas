@@ -6,6 +6,10 @@ name: Deploy do GitHub Pages
 on:
   push:
     branches: [main]
+    # O commit diário automático de stats.json não muda o site (o badge lê pela raw),
+    # então não precisa redeployar — evita deploys concorrentes que falham à toa (guia r31).
+    paths-ignore:
+      - 'stats.json'
   workflow_dispatch:
 
 permissions:

@@ -425,19 +425,19 @@
         <div class="space-y-3">
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
-                <input id="editNome" type="text" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none">
+                <input id="editNome" type="text" list="descSugestoes" autocomplete="off" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none">
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Valor (R$)</label>
                 <input id="editValor" type="number" step="0.01" min="0.01" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 outline-none">
             </div>
-            <div id="editCategoriaRow" class="hidden">
+            <div id="editCategoriaRow" style="display:none">
                 <label class="block text-xs font-medium text-gray-500 mb-1">Categoria</label>
                 <select id="editCategoria" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none">
                     <!-- populated by rebuildFormSelects() -->
                 </select>
             </div>
-            <div id="editParcelasRow" class="hidden grid grid-cols-2 gap-3">
+            <div id="editParcelasRow" class="grid grid-cols-2 gap-3" style="display:none">
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">Parcela Atual</label>
                     <input id="editCurr" type="number" min="1" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none">
@@ -447,7 +447,7 @@
                     <input id="editTotal" type="number" min="1" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none">
                 </div>
             </div>
-            <div id="editMesRow" class="hidden">
+            <div id="editMesRow" style="display:none">
                 <label class="block text-xs font-medium text-gray-500 mb-1">Mês de Início</label>
                 <select id="editMes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none"></select>
             </div>
@@ -719,7 +719,8 @@ on conflict (id) do nothing;</div>
         </div>
         <div class="md:col-span-3">
             <label class="block text-sm font-medium text-gray-700">Descrição</label>
-            <input type="text" id="newName" required class="mt-1 block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Conta de Luz, Loja...">
+            <input type="text" id="newName" required list="descSugestoes" autocomplete="off" class="mt-1 block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Conta de Luz, Loja...">
+            <datalist id="descSugestoes"><!-- populated by rebuildDescricoesDatalist() --></datalist>
         </div>
         <div class="md:col-span-2" id="divNewCategory">
             <label class="block text-sm font-medium text-gray-700">Categoria (Cartão)</label>
@@ -1336,6 +1337,9 @@ async function carregarDoSupabase() {
     const data = await res.json();
     if (data && data[0] && data[0].payload) {
         appData = normalizarAppData(data[0].payload);
+        // Reconstrói os selects/datalist com as categorias, cartões e descrições recém-carregados
+        // (senão categorias criadas em outro dispositivo não aparecem em "Adicionar Novo Lançamento").
+        if (document.getElementById('newCategory')) rebuildFormSelects();
         setSupaStatus('connected', 'Sincronizado');
         return true;
     }
@@ -1388,7 +1392,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.10.3'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.11.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -1490,6 +1494,7 @@ function normalizarAppData(data) {
     if (!data.metas)      data.metas    = [];
     if (!data.historico)  data.historico = [];
     if (!data.pagamentos) data.pagamentos = {};
+    if (!Array.isArray(data.descricoes)) data.descricoes = []; // histórico de descrições p/ autocomplete (sincronizado no blob)
     // Renda extra por mês + carry-forward do déficit + estado do simulador (v4.10.0)
     if (!Array.isArray(data.rendasExtras))                        data.rendasExtras = [];
     if (!data.carryForward || typeof data.carryForward !== 'object') data.carryForward = {};
@@ -1545,7 +1550,35 @@ function rebuildFormSelects() {
     if (prevCat && [...catEl.options].some(o => o.value === prevCat)) catEl.value = prevCat;
     document.getElementById('editCategoria').innerHTML = catOpts;
 
+    rebuildDescricoesDatalist();
     toggleFormFields();
+}
+
+// ── Autocomplete da Descrição — histórico sincronizado em appData.descricoes ──
+const DESC_MAX = 200; // máximo de descrições guardadas no histórico
+function _recordDescricao(nome) {
+    nome = (nome || '').trim();
+    if (!nome) return;
+    if (!Array.isArray(appData.descricoes)) appData.descricoes = [];
+    const low = nome.toLowerCase();
+    appData.descricoes = appData.descricoes.filter(d => (d || '').toLowerCase() !== low);
+    appData.descricoes.unshift(nome);
+    if (appData.descricoes.length > DESC_MAX) appData.descricoes.length = DESC_MAX;
+    rebuildDescricoesDatalist(); // reflete a nova descrição no autocomplete já nesta sessão
+}
+function _descSugestoes() {
+    // histórico explícito (mais recentes primeiro) + descrições dos lançamentos já existentes (semente)
+    const seen = new Set(), out = [];
+    const add = n => { n = (n || '').trim(); if (!n) return; const k = n.toLowerCase(); if (seen.has(k)) return; seen.add(k); out.push(n); };
+    (appData.descricoes || []).forEach(add);
+    [appData.faturas, appData.fixas, appData.rendas, appData.dividas, appData.rendasExtras]
+        .forEach(arr => (arr || []).forEach(it => add(it && it.name)));
+    return out.slice(0, 300);
+}
+function rebuildDescricoesDatalist() {
+    const dl = document.getElementById('descSugestoes');
+    if (!dl) return;
+    dl.innerHTML = _descSugestoes().map(n => `<option value="${esc(n)}"></option>`).join('');
 }
 
 function rebuildMonthSelects() {
@@ -1672,6 +1705,7 @@ document.getElementById('editSaveBtn').onclick = () => {
             category: document.getElementById('editCategoria').value, mesInicio: document.getElementById('editMes').value };
     }
     logHistorico('edit', tipo, nome, valor);
+    _recordDescricao(nome);
     salvarDados();
     document.getElementById('editModal').classList.add('hidden');
     toast('Item atualizado!', 'success');
@@ -2132,6 +2166,7 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
     const _tipoHist = tipo === 'Fixa' ? 'fixa' : tipo === 'Renda' ? 'renda' : tipo === 'RendaExtra' ? 'rendaExtra' : tipo === 'Divida' ? 'divida' : 'fatura';
     logHistorico('add', _tipoHist, nome, valor);
     trackFormUsage(tipo, isCard ? categoria : null);
+    _recordDescricao(nome);
     salvarDados();
     this.reset();
     document.getElementById('newCurr').value  = 1;
