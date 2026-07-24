@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.11.1] — Julho 2026
+
+### 🐛 Correções
+- **Formulário "Adicionar Novo Lançamento" no celular** — os campos que dependem do tipo (Categoria/Cartão, Parcelas e Mês) voltam a aparecer/ocultar corretamente ao trocar o **Tipo de Lançamento** na versão mobile. Antes, no celular, o formulário era uma cópia "congelada" e não reagia à troca de tipo — o que impedia, por exemplo, escolher o **Mês** de uma **Renda Extra**/**Dívida** ou informar **Parcelas/Categoria** de um **Cartão**.
+
+### 🔧 Melhorado
+- **Formulário unificado entre desktop e celular (fonte única).** O bottom-sheet do celular passou a usar exatamente o mesmo formulário do desktop (em vez de uma cópia), eliminando a duplicação que fazia correções feitas no app não valerem na versão mobile. Daqui pra frente, qualquer ajuste no formulário vale automaticamente para as duas versões.
+
+---
+
 ## [4.11.0] — Julho 2026
 
 ### 🆕 Adicionado

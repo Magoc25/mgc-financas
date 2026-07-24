@@ -1392,7 +1392,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.11.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.11.1'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -2175,6 +2175,7 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
     applyFormDefaults();
     processarDadosERenderizar();
     toast('Lançamento adicionado!', 'success');
+    if (_formNoSheet()) fecharFormSheet();   // no mobile, fecha o bottom-sheet após adicionar
 });
 
 document.addEventListener('keydown', e => {
@@ -3530,54 +3531,44 @@ function navTo(sec) {
     if (sec === 'graficos') setTimeout(processarDadosERenderizar, 120);
 }
 
-// ── Form bottom sheet ──────────────────────────────────────
+// ── Form bottom sheet (Rota B: relocaliza o form REAL — sem clone, sem ids duplicados) ──
+// Mover o próprio #addExpenseForm para dentro do sheet garante que toggleFormFields, o submit,
+// o autocomplete da Descrição e QUALQUER fix futuro funcionem igual no celular e no desktop
+// (fonte única de DOM — nada de cloneNode com ids duplicados, que era a raiz das quebras mobile).
+let _formHome = null; // parent original do form no layout desktop (#mainFormSection)
+
+function _formNoSheet() {
+    const f = document.getElementById('addExpenseForm');
+    return !!(f && f.parentElement && f.parentElement.id === 'formSheetBody');
+}
+function _devolverFormAoDesktop() {
+    if (_formHome && _formNoSheet()) _formHome.appendChild(document.getElementById('addExpenseForm'));
+}
+
 function abrirFormSheet() {
-    // Clone the main form into the sheet on first open
-    const sheet = document.getElementById('formSheetBody');
-    if (!sheet.querySelector('form')) {
-        const clone = document.getElementById('addExpenseForm').cloneNode(true);
-        clone.id = 'addExpenseFormSheet';
-        // wire submit to the original handler logic via a proxy
-        clone.addEventListener('submit', function(e) {
-            e.preventDefault();
-            // copy values back to original fields and trigger submit
-            ['newType','newName','newAmount','newCurr','newTotal','newMonth','newCategory'].forEach(id => {
-                const orig  = document.getElementById(id);
-                const clone = this.querySelector('#' + id);
-                if (orig && clone) orig.value = clone.value;
-            });
-            document.getElementById('addExpenseForm').dispatchEvent(new Event('submit'));
-            fecharFormSheet();
-        });
-        sheet.appendChild(clone);
-        // rebuild selects in clone
-        setTimeout(rebuildFormSelectsSheet, 80);
-    }
-    rebuildFormSelectsSheet();
+    const form = document.getElementById('addExpenseForm');
+    if (!form) return;
+    if (!_formHome) _formHome = form.parentElement;          // guarda a casa desktop na 1ª abertura
+    document.getElementById('formSheetBody').appendChild(form); // relocaliza o form REAL
+    rebuildFormSelects();                                     // tipos/cartões/categorias/datalist + toggle
+    applyFormDefaults();                                      // tipo mais usado + toggleFormFields no form real
+    const mo = document.getElementById('newMonth');
+    if (mo) mo.value = monthNames[HISTORY_COUNT];
     document.getElementById('formSheet').classList.add('open');
-    setTimeout(() => {
-        const inp = document.getElementById('formSheetBody').querySelector('input[type=text]');
-        if (inp) inp.focus();
-    }, 350);
+    setTimeout(() => { const inp = document.getElementById('newName'); if (inp) inp.focus(); }, 350);
 }
 
 function fecharFormSheet() {
     document.getElementById('formSheet').classList.remove('open');
+    setTimeout(_devolverFormAoDesktop, 360); // devolve o form à casa desktop após a animação de saída
 }
 
-function rebuildFormSelectsSheet() {
-    const sheet = document.getElementById('formSheetBody');
-    if (!sheet) return;
-    const orig = document.getElementById('addExpenseForm');
-    ['newType','newMonth','newCategory'].forEach(id => {
-        const os = orig.querySelector('#' + id);
-        const ss = sheet.querySelector('#' + id);
-        if (os && ss) {
-            ss.innerHTML = os.innerHTML;
-            if (id === 'newMonth') ss.value = monthNames[HISTORY_COUNT];
-        }
-    });
-}
+// Rede de segurança: se a viewport virar desktop (≥768px) com o sheet fechado, garante o form na casa dele
+window.addEventListener('resize', () => {
+    if (window.innerWidth >= 768 && !document.getElementById('formSheet').classList.contains('open')) {
+        _devolverFormAoDesktop();
+    }
+});
 
 // ── Mais bottom sheet ──────────────────────────────────────
 function abrirMaisSheet()  { document.getElementById('maisSheet').classList.add('open'); }
