@@ -5,6 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.11.3] — Julho 2026
+
+### 🐛 Correções
+- **Tabela "Fluxo de Caixa Mensal — Visão Geral" no celular** — a tabela agora **abre já no mês atual**. Antes, no celular, ela abria encostada nos meses mais antigos (à esquerda), onde Faturas e Dívidas ainda são zero — dando a impressão de que só Renda e Despesas Fixas tinham valores. Os valores sempre estiveram lá, nas colunas do mês atual e seguintes; agora aparecem já na abertura.
+
+---
+
 ## [4.11.2] — Julho 2026
 
 ### 🐛 Correções

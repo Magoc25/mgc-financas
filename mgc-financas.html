@@ -1392,7 +1392,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.11.2'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.11.3'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -2958,6 +2958,21 @@ function renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals) {
         const fw    = isLast ? 'font-bold border-t-2 border-gray-300' : '';
         return `<tr class="${fw}"><td class="cashflow-label ${row.cls}" style="background:${rowBg || bgLabel}">${row.label}</td>${cells}</tr>`;
     }).join('');
+
+    // No mobile a tabela abre encostada à ESQUERDA (meses passados), onde Faturas/Dívidas são 0
+    // → parecia "sem valores" (na verdade os valores estão nas colunas do mês atual/futuros, fora
+    // da tela estreita). Rola para o mês ATUAL ficar visível já na abertura (fix v4.11.3).
+    requestAnimationFrame(() => {
+        const wrap = body.closest('.overflow-x-auto');
+        const ths  = head.querySelectorAll('th');
+        const cur  = ths[1 + HISTORY_COUNT]; // th[0] = rótulo "Categoria"; th[1..] = meses (HISTORY_COUNT = mês atual)
+        if (!wrap || !cur) return;
+        const curRect  = cur.getBoundingClientRect();
+        const wrapRect = wrap.getBoundingClientRect();
+        const labelW   = ths[0] ? ths[0].getBoundingClientRect().width : 0;
+        // encosta a coluna do mês atual logo após a coluna de rótulo (que é sticky)
+        wrap.scrollLeft += (curRect.left - wrapRect.left) - labelW - 4;
+    });
 }
 
 function renderDividasTable(selectedMonthIndex) {
