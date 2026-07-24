@@ -5,6 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.11.2] — Julho 2026
+
+### 🐛 Correções
+- **Tabela "Fluxo de Caixa Mensal — Visão Geral" no celular** — as linhas de **Faturas**, **Dívidas** e **Saldo** voltam a mostrar os valores. No mobile, quando um dos gráficos acima da tabela falhava ao desenhar (Chart.js num canvas de seção ainda oculta), o erro **abortava o restante da renderização** e a tabela ficava só com Renda e Despesas Fixas. Agora cada gráfico/tabela/narrativa é renderizado de forma **isolada** — a falha de um não derruba os demais.
+
+---
+
 ## [4.11.1] — Julho 2026
 
 ### 🐛 Correções

@@ -1392,7 +1392,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.11.1'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.11.2'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -2634,13 +2634,17 @@ function renderDashboard() {
     // Alert banner (limites)
     renderAlertBanner(categoryTotalsThisMonth, mesRef);
 
-    // Charts
-    renderBarChart(monthlyFaturasTotals, monthlyDividasTotals);
-    renderPieChart(categoryTotalsThisMonth, valorDividaRef, mesRef, carriedMes);
-    renderCategoryTrendChart(monthlyDividasTotals);
-    renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef, rendaExtraMes, carriedMes);
-    renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals);
-    renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc, rendaExtraMes, carriedMes);
+    // Charts + tabela + narrativa — cada bloco ISOLADO: um erro (ex.: Chart.js falhando num
+    // canvas de seção oculta no mobile) NÃO pode abortar os demais nem a TABELA de Fluxo de
+    // Caixa / a narrativa. Era o bug v4.11.2: no celular a tabela ficava sem Faturas/Dívidas
+    // porque um gráfico entre a barra e a tabela lançava e abortava renderDashboard.
+    const _safeRender = (fn, nome) => { try { fn(); } catch (e) { console.error('[render] falhou:', nome, e); } };
+    _safeRender(() => renderBarChart(monthlyFaturasTotals, monthlyDividasTotals), 'barChart');
+    _safeRender(() => renderPieChart(categoryTotalsThisMonth, valorDividaRef, mesRef, carriedMes), 'pieChart');
+    _safeRender(() => renderCategoryTrendChart(monthlyDividasTotals), 'categoryTrendChart');
+    _safeRender(() => renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef, rendaExtraMes, carriedMes), 'waterfallChart');
+    _safeRender(() => renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals), 'fluxoCaixa');
+    _safeRender(() => renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc, rendaExtraMes, carriedMes), 'narrativa');
 
     // Tables
     renderDividasTable(selectedMonthIndex);
