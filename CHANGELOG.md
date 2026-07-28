@@ -5,6 +5,22 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.12.0] — Julho 2026
+
+### 🐛 Correções
+- **Lançamentos sumiam ao usar dois aparelhos.** Com o app aberto no computador e no celular, o aparelho que ainda não tinha recebido as novidades regravava a nuvem inteira com a própria versão dos dados — e o que havia sido lançado no outro aparelho **desaparecia, sem aviso**. Agora **toda gravação lê a nuvem antes de escrever e junta os dois lados**: nada é mais sobrescrito. Vale também no sentido inverso — o que você lança **sem internet** deixou de ser descartado ao abrir o app da próxima vez.
+
+### 🔧 Melhorado
+- **Apagar, editar e desfazer agora valem em todos os aparelhos.** Cada lançamento passou a ter identidade própria e carimbo de hora: item apagado num aparelho não "ressuscita" pelo outro, a edição mais recente vence, e o **Desfazer** restaura o item em todos. Categorias e cartões seguem a mesma regra.
+- **Sem internet, o app avisa** ("Sem conexão — salvo só neste aparelho") em vez de dar a entender que sincronizou; tudo sobe assim que a conexão volta.
+- **Importar backup** voltou a ser uma restauração de verdade: o backup passa a valer também nos outros aparelhos, em vez de se misturar com o que havia antes.
+- Modo escuro: a barra de progresso das metas não fica mais clara demais. No celular, o campo de limite por categoria deixou de provocar zoom ao ser tocado.
+
+### ⚠️ Importante
+- **Atualize o app em todos os aparelhos.** Enquanto um deles continuar na versão anterior, ele ainda pode sobrescrever a nuvem — a proteção só fica completa quando todos estão na 4.12.0.
+
+---
+
 ## [4.11.3] — Julho 2026
 
 ### 🐛 Correções

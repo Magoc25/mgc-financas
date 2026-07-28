@@ -330,10 +330,13 @@
         .manager-tag .tag-remove:hover { color: #ef4444; }
         .limit-input { width: 80px; font-size: 11px; padding: 2px 6px; border: 1px solid #d1d5db; border-radius: 6px; outline: none; text-align: right; }
         html.dark .limit-input { background: #0f172a !important; color: #f1f5f9 !important; border-color: #475569 !important; }
+        /* Guia §24: no mobile, campo de texto não desce de 16px — abaixo disso o iOS dá zoom ao focar */
+        @media (max-width: 767px) { .limit-input { width: 92px; font-size: 16px; padding: 2px 6px; } }
 
         /* Goal cards */
         .goal-card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1rem; min-width: 180px; flex: 1; }
         .goal-progress-bar { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+        html.dark .goal-progress-bar { background: #334155; }
         .goal-bar-fill { height: 100%; border-radius: 3px; transition: width 0.7s ease; }
 
         /* Alert banner */
@@ -1329,31 +1332,52 @@ async function supaFetch(path, options = {}) {
     } catch(e) { console.error('Supabase:', e.message); return null; }
 }
 
-async function carregarDoSupabase() {
+// CAMINHO ÚNICO de escrita do blob (guia §15 · r68a): select → merge → update.
+// O boot e o save entram pela MESMA função — duas funções que escrevem envelhecem
+// desencontradas (r66b). Leitura falhou? NÃO grava: escrever sem ter fundido é
+// justamente o que apaga o lançamento feito no outro aparelho.
+let _syncFila = Promise.resolve();
+let _syncAvisoOffline = 0;
+async function sincronizarSupabase(motivo) {
     if (!SUPA_URL || !SUPA_KEY) return false;
-    setSupaStatus('syncing', 'Conectando...');
-    const res = await supaFetch('finance_data?id=eq.1&select=payload');
-    if (!res) { setSupaStatus('error', 'Erro'); return false; }
-    const data = await res.json();
-    if (data && data[0] && data[0].payload) {
-        appData = normalizarAppData(data[0].payload);
-        // Reconstrói os selects/datalist com as categorias, cartões e descrições recém-carregados
-        // (senão categorias criadas em outro dispositivo não aparecem em "Adicionar Novo Lançamento").
-        if (document.getElementById('newCategory')) rebuildFormSelects();
-        setSupaStatus('connected', 'Sincronizado');
-        return true;
-    }
-    setSupaStatus('error', 'Tabela vazia');
-    return false;
+    const tarefa = _syncFila.then(() => _sincronizarAgora(motivo), () => _sincronizarAgora(motivo));
+    _syncFila = tarefa.catch(() => {});   // uma falha não trava a fila
+    return tarefa;
 }
 
-async function salvarNoSupabase() {
-    if (!SUPA_URL || !SUPA_KEY) return;
-    setSupaStatus('syncing', 'Salvando...');
-    const res = await supaFetch('finance_data', { method: 'POST', headers: { 'Prefer': 'resolution=merge-duplicates' }, body: JSON.stringify({ id: 1, payload: appData, updated_at: new Date().toISOString() }) });
-    if (res) { setSupaStatus('connected', 'Sincronizado'); }
+async function _sincronizarAgora(motivo) {
+    setSupaStatus('syncing', motivo === 'boot' ? 'Conectando...' : 'Salvando...');
+    const res = await supaFetch('finance_data?id=eq.1&select=payload');
+    if (!res) {
+        setSupaStatus('error', 'Sem conexão');
+        // 1 aviso por vez: cada ação dispara 2 saves (logHistorico + salvarDados)
+        if (motivo !== 'boot' && Date.now() - _syncAvisoOffline > 10000) { _syncAvisoOffline = Date.now(); toast('Sem conexão — salvo só neste aparelho.', 'warning'); }
+        return false;   // fica no localStorage e sobe na próxima sincronização, sem perder nada
+    }
+    let remoto = null;
+    try { const linhas = await res.json(); if (linhas && linhas[0]) remoto = linhas[0].payload; } catch (e) { console.error('Supabase: payload ilegível', e); }
+
+    appData = remoto ? mesclarAppData(remoto, appData) : normalizarAppData(appData);
+    appData._syncTs = Date.now();
+    _syncSnapshot();                                   // o fundido passa a ser a base dos próximos carimbos
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+
+    const ok = await supaFetch('finance_data', { method: 'POST', headers: { 'Prefer': 'resolution=merge-duplicates' }, body: JSON.stringify({ id: 1, payload: appData, updated_at: new Date().toISOString() }) });
+    if (ok) setSupaStatus('connected', 'Sincronizado');
     else { setSupaStatus('error', 'Falha ao salvar'); toast('Não foi possível salvar no Supabase.', 'warning'); }
+    return !!ok;
 }
+
+async function carregarDoSupabase() {
+    if (!SUPA_URL || !SUPA_KEY) return false;
+    const ok = await sincronizarSupabase('boot');
+    // Reconstrói os selects/datalist com as categorias, cartões e descrições recém-fundidos
+    // (senão categorias criadas em outro dispositivo não aparecem em "Adicionar Novo Lançamento").
+    if (ok && document.getElementById('newCategory')) rebuildFormSelects();
+    return ok;
+}
+
+async function salvarNoSupabase() { return sincronizarSupabase('save'); }
 
 function abrirSettings() {
     document.getElementById('inputSupaUrl').value = SUPA_URL;
@@ -1392,7 +1416,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.11.3'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.12.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -1518,7 +1542,234 @@ function normalizarAppData(data) {
         data.metas.push({ id: Date.now(), name: 'Meta Mensal', target: data.meta * 12, mensal: data.meta, acumulado: 0 });
         data.meta = 0;
     }
+    // ── Sync: envelope, tombstones e identidade por item (guia §15 · r66a) ──
+    if (!data.del || typeof data.del !== 'object') data.del = {};   // tombstones  { id | prefixo+valor : ts }
+    if (!data.add || typeof data.add !== 'object') data.add = {};   // carimbo de (re)inclusão dos conjuntos
+    if (typeof data._syncTs    !== 'number') data._syncTs    = 0;   // quando este blob foi fundido/gravado
+    if (typeof data._histClear !== 'number') data._histClear = 0;   // "limpar histórico" (corte do log)
+    data._v = 2;
+    for (const col of SYNC_COLECOES) {
+        const arr = _syncPath(data, col);
+        if (!Array.isArray(arr)) continue;
+        arr.forEach((it, i) => {
+            if (!it || typeof it !== 'object') return;
+            if (it.id == null || it.id === '')      it.id = _syncIdLegado(col, i, it); // migração determinística
+            if (typeof it.updatedAt !== 'number')   it.updatedAt = 0;                  // legado perde p/ qualquer edição
+        });
+    }
     return data;
+}
+
+// ============================================================
+// SYNC — união por id, tombstones e ler-fundir-gravar (guia §15 · r66a/r68a)
+// ------------------------------------------------------------
+// O estado viaja como UM blob compartilhado (finance_data.payload). Escrita cega
+// do blob = o aparelho que ainda não puxou republica o próprio recorte por cima da
+// nuvem e desfaz o que o outro criou — perda silenciosa, que converge "por sorte".
+// Por isso: TODA escrita passa por sincronizarSupabase() (select → merge → update),
+// e toda coleção sincronizada tem id + updatedAt por item, com tombstone p/ exclusão.
+// COLEÇÃO NOVA? Registre-a abaixo — _syncColecoesNaoRegistradas() (r68b) derruba o
+// smoke se alguém esquecer, em vez de depender de lembrar da regra.
+// ============================================================
+const SYNC_COLECOES  = ['rendas','fixas','faturas','dividas','rendasExtras','metas','investimentos.cenarios'];
+const SYNC_CONJUNTOS = ['categorias','cartoes','descricoes'];    // arrays de string → união
+const SYNC_MAPAS     = ['limites','pagamentos','carryForward'];  // por chave; conflito → blob mais novo
+const SYNC_CONFIGS   = ['planejamento','investimentos.config','meta','categoriasV2'];
+const SYNC_LOGS      = ['historico'];
+const SYNC_PREFIXO   = { categorias: 'cat:', cartoes: 'card:', descricoes: 'desc:' };
+const SYNC_TOMB_TTL  = 180 * 24 * 60 * 60 * 1000;   // poda tombstone velho (6 meses)
+
+function _syncPath(obj, p) { return p.split('.').reduce((o, k) => (o == null ? o : o[k]), obj); }
+function _syncSetPath(obj, p, v) {
+    const ks = p.split('.'), ult = ks.pop();
+    let o = obj;
+    for (const k of ks) { if (!o[k] || typeof o[k] !== 'object') o[k] = {}; o = o[k]; }
+    o[ult] = v;
+}
+function _syncNovoId() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+function _syncHash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+// Id de item legado: DETERMINÍSTICO (coleção + posição + conteúdo). Os dois aparelhos
+// migram o mesmo blob antigo e chegam ao MESMO id — senão a 1ª fusão duplicaria tudo.
+function _syncIdLegado(col, i, it) {
+    return 'lg' + _syncHash([col, i, it.name, it.amount, it.mes, it.mesInicio, it.card, it.curr, it.total, it.target].join('|'));
+}
+// Conteúdo do item sem os campos de sync, com ordem estável de chaves — detecta edição.
+function _syncConteudo(it) {
+    const c = {};
+    for (const k of Object.keys(it).sort()) if (k !== 'id' && k !== 'updatedAt') c[k] = it[k];
+    return JSON.stringify(c);
+}
+
+// Espelho do último estado salvo: é dele que saem os carimbos (item novo, editado,
+// duplicado ou removido) SEM tocar em nenhum dos ~15 pontos que mexem nas coleções.
+let _snapSync = {};
+function _syncSnapshot() {
+    const snap = {};
+    for (const col of SYNC_COLECOES) {
+        const arr = _syncPath(appData, col);
+        if (Array.isArray(arr)) for (const it of arr) if (it && typeof it === 'object' && it.id != null) snap[col + ':' + it.id] = _syncConteudo(it);
+    }
+    for (const col of SYNC_CONJUNTOS) {
+        const arr = _syncPath(appData, col);
+        if (Array.isArray(arr)) for (const s of arr) snap[col + ':' + s] = 1;
+    }
+    _snapSync = snap;
+}
+
+// Carimba o que mudou desde o último save. Roda no salvarDados(), antes de persistir.
+function _syncCarimbar() {
+    const agora = Date.now(), snap = {}, vistos = new Set();
+    for (const col of SYNC_COLECOES) {
+        const arr = _syncPath(appData, col);
+        if (!Array.isArray(arr)) continue;
+        const idsCol = new Set();
+        for (const it of arr) {
+            if (!it || typeof it !== 'object') continue;
+            // sem id (novo) ou id repetido (duplicarItem copia o objeto inteiro) → identidade própria
+            if (it.id == null || it.id === '' || idsCol.has(String(it.id))) { it.id = _syncNovoId(); it.updatedAt = agora; }
+            idsCol.add(String(it.id));
+            const chave = col + ':' + it.id;
+            if (!(chave in _snapSync)) { it.updatedAt = agora; delete appData.del[String(it.id)]; } // novo ou ressuscitado (desfazerRemocao)
+            else if (_snapSync[chave] !== _syncConteudo(it)) it.updatedAt = agora;                  // editado
+            snap[chave] = _syncConteudo(it);
+            vistos.add(chave);
+        }
+    }
+    for (const col of SYNC_CONJUNTOS) {
+        const arr = _syncPath(appData, col);
+        if (!Array.isArray(arr)) continue;
+        const pref = SYNC_PREFIXO[col];
+        for (const s of arr) {
+            const chave = col + ':' + s;
+            if (!(chave in _snapSync)) { appData.add[pref + s] = agora; delete appData.del[pref + s]; }
+            snap[chave] = 1;
+            vistos.add(chave);
+        }
+    }
+    // sumiu desde o último save → tombstone (ausência sozinha nunca apaga no merge)
+    for (const chave of Object.keys(_snapSync)) {
+        if (vistos.has(chave)) continue;
+        const i = chave.indexOf(':'), col = chave.slice(0, i), resto = chave.slice(i + 1);
+        appData.del[(SYNC_PREFIXO[col] || '') + resto] = agora;
+    }
+    _snapSync = snap;
+}
+
+// Import de backup = restauração explícita (guia §15): recarimba os itens importados
+// para que nenhum tombstone antigo (daqui ou do outro aparelho) os reapague.
+function _syncRestaurar() {
+    const agora = Date.now();
+    for (const col of SYNC_COLECOES) {
+        const arr = _syncPath(appData, col);
+        if (Array.isArray(arr)) for (const it of arr) if (it && typeof it === 'object') { if (it.id == null || it.id === '') it.id = _syncNovoId(); it.updatedAt = agora; }
+    }
+    for (const col of SYNC_CONJUNTOS) {
+        const arr = _syncPath(appData, col), pref = SYNC_PREFIXO[col];
+        if (Array.isArray(arr)) for (const s of arr) { appData.add[pref + s] = agora; delete appData.del[pref + s]; }
+    }
+    appData._syncTs = agora;
+    _syncSnapshot();
+}
+
+// Funde o payload remoto com o estado local. Classificação de campo (guia §15 · r65a):
+//   • coleção com id → união por id; mesmo id vence o updatedAt maior (empate → remoto, evita pingue-pongue)
+//   • exclusão       → tombstone del[id]; só apaga se o carimbo for >= updatedAt (edição posterior revive)
+//   • conjunto       → união; a string sobrevive se add[chave] >= del[chave]
+//   • mapa           → união de chaves; chave nos dois → blob mais novo (ausência NUNCA apaga)
+//   • config/escalar → blob mais novo
+//   • log            → união dedupada, corta no HIST_MAX e respeita "limpar histórico"
+function mesclarAppData(remoto, local) {
+    const R = normalizarAppData(JSON.parse(JSON.stringify(remoto || {})));
+    const L = normalizarAppData(local || {});
+    const localMaisNovo = (L._syncTs || 0) >= (R._syncTs || 0);
+    const out = JSON.parse(JSON.stringify(localMaisNovo ? L : R)); // base = blob mais novo (cobre config e campo ainda não registrado)
+
+    const del = {}, add = {};
+    for (const [k, v] of [...Object.entries(R.del || {}), ...Object.entries(L.del || {})]) del[k] = Math.max(del[k] || 0, v || 0);
+    for (const [k, v] of [...Object.entries(R.add || {}), ...Object.entries(L.add || {})]) add[k] = Math.max(add[k] || 0, v || 0);
+
+    for (const col of SYNC_COLECOES) {
+        const aR = _syncPath(R, col) || [], aL = _syncPath(L, col) || [];
+        const win = new Map(), ordem = [];
+        const considerar = it => {
+            if (!it || typeof it !== 'object' || it.id == null) return;
+            const id = String(it.id), atual = win.get(id);
+            if (!atual || (it.updatedAt || 0) > (atual.updatedAt || 0)) win.set(id, it); // empate → quem entrou antes (remoto)
+        };
+        aR.forEach(considerar);
+        aL.forEach(considerar);
+        for (const it of aL) if (it && it.id != null && !ordem.includes(String(it.id))) ordem.push(String(it.id)); // ordem local preservada
+        for (const it of aR) if (it && it.id != null && !ordem.includes(String(it.id))) ordem.push(String(it.id)); // só-remotos no fim
+        const fim = [];
+        for (const id of ordem) {
+            const it = win.get(id);
+            if (!it) continue;
+            const t = del[id] || 0;
+            if (t && t >= (it.updatedAt || 0)) continue;   // exclusão vence; edição posterior revive
+            fim.push(it);
+        }
+        _syncSetPath(out, col, fim);
+    }
+
+    for (const col of SYNC_CONJUNTOS) {
+        const pref = SYNC_PREFIXO[col];
+        const vistos = new Set(), fim = [];
+        for (const s of [...(_syncPath(L, col) || []), ...(_syncPath(R, col) || [])]) {
+            if (typeof s !== 'string' || vistos.has(s)) continue;
+            vistos.add(s);
+            if ((del[pref + s] || 0) > (add[pref + s] || 0)) continue;  // removido depois da última inclusão
+            fim.push(s);
+        }
+        _syncSetPath(out, col, col === 'descricoes' ? fim.slice(0, 200) : fim);
+    }
+
+    for (const col of SYNC_MAPAS) {
+        const mR = _syncPath(R, col) || {}, mL = _syncPath(L, col) || {};
+        _syncSetPath(out, col, localMaisNovo ? { ...mR, ...mL } : { ...mL, ...mR });
+    }
+
+    for (const col of SYNC_CONFIGS) {
+        const vR = _syncPath(R, col), vL = _syncPath(L, col);
+        if (vR && typeof vR === 'object' && vL && typeof vL === 'object') _syncSetPath(out, col, localMaisNovo ? { ...vR, ...vL } : { ...vL, ...vR });
+        else _syncSetPath(out, col, localMaisNovo ? (vL !== undefined ? vL : vR) : (vR !== undefined ? vR : vL));
+    }
+
+    const corte = Math.max(L._histClear || 0, R._histClear || 0);
+    const vistosH = new Set(), hist = [];
+    for (const h of [...(L.historico || []), ...(R.historico || [])]) {
+        if (!h) continue;
+        if (corte && (h._t || 0) < corte) continue;   // "limpar histórico" apaga o que é anterior ao corte
+        const ch = [h._t || 0, h.ts, h.acao, h.tipo, h.nome, h.valor].join('|');
+        if (vistosH.has(ch)) continue;
+        vistosH.add(ch); hist.push(h);
+    }
+    hist.sort((a, b) => (b._t || 0) - (a._t || 0));
+    out.historico = hist.slice(0, HIST_MAX);
+
+    const agora = Date.now();
+    for (const k of Object.keys(del)) if (agora - del[k] > SYNC_TOMB_TTL) delete del[k];
+    for (const k of Object.keys(add)) if (!del[k] && agora - add[k] > SYNC_TOMB_TTL) delete add[k];
+    out.del = del; out.add = add;
+    out._histClear = corte;
+    out._syncTs = Math.max(L._syncTs || 0, R._syncTs || 0);
+    return normalizarAppData(out);
+}
+
+// r68b — a regra vira teste: coleção nova que não se inscrever aqui derruba o smoke,
+// sem depender de alguém lembrar do guia na próxima feature.
+function _syncColecoesNaoRegistradas() {
+    const base = normalizarAppData({});
+    const reg  = new Set([...SYNC_COLECOES, ...SYNC_CONJUNTOS, ...SYNC_MAPAS, ...SYNC_CONFIGS, ...SYNC_LOGS]);
+    const meta = new Set(['del', 'add', '_syncTs', '_histClear', '_v']);
+    const falta = [];
+    for (const k of Object.keys(base)) {
+        const v = base[k];
+        if (meta.has(k) || reg.has(k)) continue;
+        if (!(Array.isArray(v) || (v && typeof v === 'object'))) continue;              // escalar → LWW do blob, ok
+        if ([...reg].some(p => p.startsWith(k + '.'))) continue;                        // registrado por caminho (investimentos.*)
+        falta.push(k);
+    }
+    return falta;
 }
 
 function rebuildFormSelects() {
@@ -1931,8 +2182,10 @@ if (_saved) {
     try { appData = normalizarAppData(JSON.parse(_saved)); }
     catch { toast('Erro ao carregar dados locais.', 'error'); }
 }
+_syncSnapshot();   // base dos carimbos de sync (o que já estava salvo não conta como mudança)
 
 function salvarDados() {
+    _syncCarimbar();   // id/updatedAt do que mudou + tombstone do que sumiu (guia §15 · r66a)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
     salvarNoSupabase();
 }
@@ -2039,6 +2292,8 @@ function importarDados(event) {
             const erro = validarBackup(imported);
             if (erro) { toast(`Importação cancelada: ${erro}`, 'error'); return; }
             appData = normalizarAppData(imported);
+            _syncCarimbar();    // tombstona o que existia e NÃO veio no backup (import é autoritativo)
+            _syncRestaurar();   // recarimba o importado p/ nenhum tombstone antigo reapagá-lo (guia §15)
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
             rebuildFormSelects();
             processarDadosERenderizar();
@@ -3401,7 +3656,7 @@ const ACAO_LABEL  = { add:'Adicionado', edit:'Editado', remove:'Removido', dup:'
 function logHistorico(acao, tipo, nome, valor = null) {
     if (!appData.historico) appData.historico = [];
     const ts = new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
-    appData.historico.unshift({ ts, acao, tipo, nome, valor });
+    appData.historico.unshift({ ts, acao, tipo, nome, valor, _t: Date.now() }); // _t = carimbo comparável no merge
     if (appData.historico.length > HIST_MAX) appData.historico.length = HIST_MAX;
     salvarDados();
 }
@@ -3426,6 +3681,7 @@ function abrirHistorico() {
 function limparHistorico() {
     if (!confirm('Limpar todo o histórico?')) return;
     appData.historico = [];
+    appData._histClear = Date.now();   // senão o log volta do outro aparelho na próxima fusão
     salvarDados();
     abrirHistorico();
     toast('Histórico limpo.', 'info');
