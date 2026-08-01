@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas o MGC Finanças é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.12.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.12.1-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -201,9 +201,9 @@ Vá em **Settings → Data API**:
 > ⚠️ **Nunca use a Secret key no dashboard.** Somente a Publishable key.
 
 #### 4. Configurar no MGC Finanças
-1. Abra o dashboard → clique em ☁️ (ícone de nuvem no header)
+1. Abra o dashboard → clique em **⚙** (engrenagem no topo, ao lado do título — no celular: **⋯ Mais → ⚙ Configurar Supabase**)
 2. Cole a **Project URL** e a **Publishable key**
-3. Clique em **Salvar e sincronizar**
+3. Clique em **Salvar e conectar**
 4. Os dados são enviados imediatamente e sincronizados a cada salvamento
 
 #### Bloco extra — Evitar suspensão por inatividade (recomendado)

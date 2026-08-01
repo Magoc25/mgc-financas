@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.12.1] — Agosto 2026
+
+### 🐛 Correções
+- **Versão errada no cabeçalho.** O texto ao lado do título trazia uma versão fixa e antiga (`v4.3.0`) escrita direto na página, sobrescrita pelo app na abertura. Bastava o app demorar um instante para você ver uma versão de nove atualizações atrás. Agora o cabeçalho nasce vazio e só mostra a versão que o app realmente está rodando.
+
+### 🔧 Melhorado
+- **Instruções do Supabase corrigidas.** O passo a passo mandava clicar num ícone de nuvem e num botão "Salvar e sincronizar" que não existem — o certo é a **engrenagem ⚙** e o botão **"Salvar e conectar"**. A tela de configuração também passou a apontar o caminho atual das chaves no Supabase (*Settings → Data API*) e a aceitar o nome novo da chave (*Publishable key*).
+
+---
+
 ## [4.12.0] — Julho 2026
 
 ### 🐛 Correções
