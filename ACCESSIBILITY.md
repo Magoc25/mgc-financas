@@ -1,4 +1,4 @@
-# Declaração de Acessibilidade — MGC Finanças
+# Declaração de Acessibilidade — Margem
 
 **Versão:** 1.0 · **Última atualização:** Maio de 2026
 
@@ -6,7 +6,7 @@
 
 ## 1. Compromisso
 
-O MGC Finanças é desenvolvido por um único desenvolvedor independente (ATPP) com esforço contínuo para tornar o aplicativo acessível ao maior número possível de pessoas, independentemente de suas capacidades.
+Margem é um app desenvolvido por um único desenvolvedor independente (ATPP) com esforço contínuo para tornar o aplicativo acessível ao maior número possível de pessoas, independentemente de suas capacidades.
 
 Este documento é publicado em conformidade com a [Lei 13.146/2015 (Lei Brasileira de Inclusão — Estatuto da Pessoa com Deficiência)](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13146.htm), Art. 63, e com o nível de esforço proporcional ao porte do agente (ATPP conforme [Resolução CD/ANPD nº 2/2022](https://www.gov.br/anpd/pt-br/acesso-a-informacao/institucional/atos-normativos/regulamentacoes_anpd/resolucao-cd-anpd-no-2-de-27-de-janeiro-de-2022)).
 
@@ -67,7 +67,7 @@ Não foram realizados testes formais com tecnologias assistivas. O app foi desen
 Se você encontrar uma barreira de acessibilidade:
 
 **E-mail:** marlongc25@protonmail.com
-**Assunto:** `[ACESSIBILIDADE] MGC Finanças — [descrição do problema]`
+**Assunto:** `[ACESSIBILIDADE] Margem — [descrição do problema]`
 
 Por favor, descreva:
 - O que tentou fazer

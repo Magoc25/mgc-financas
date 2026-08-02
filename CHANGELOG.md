@@ -1,7 +1,16 @@
-# Changelog — MGC Finanças
+# Changelog — Margem
 
 Todas as mudanças notáveis neste projeto estão documentadas aqui.  
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
+
+---
+
+## [4.13.0] — Agosto 2026
+
+### 🆕 Adicionado
+- **O app agora se chama Margem.** É só o nome — nada muda no funcionamento, e **nenhum dado seu é afetado**. "Margem" é o que sobra da sua renda depois das despesas, medido contra o que você planejou: é exatamente o número que o app calcula. O novo nome aparece na barra de título da janela, embaixo do ícone no celular e na área de trabalho, e na hora de instalar.
+
+> ℹ️ **Se você já tem o app instalado:** no **Android**, o nome se atualiza sozinho em 1 a 3 dias depois que você abrir o app atualizado — não desinstale. No **Windows**, o atalho do Menu Iniciar se atualiza ao reinstalar, mas um ícone fixado na barra de tarefas continua com o nome antigo até você desafixar e refixar. No **iPhone/iPad**, só remover e re-adicionar à Tela de Início atualiza — **e isso apaga os dados guardados no aparelho**, então sincronize ou exporte um backup antes.
 
 ---
 

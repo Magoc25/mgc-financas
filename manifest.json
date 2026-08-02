@@ -1,16 +1,22 @@
 {
-  "name": "MGC Finanças",
-  "short_name": "MGC",
+  "name": "Margem · Finanças pessoais",
+  "short_name": "Margem",
   "description": "Planejamento financeiro pessoal",
   "start_url": "./mgc-financas.html",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
   "orientation": "any",
   "background_color": "#0f172a",
   "theme_color": "#1e3a8a",
   "lang": "pt-BR",
-  "categories": ["productivity", "utilities"],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "./icon-192.png",

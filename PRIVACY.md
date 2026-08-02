@@ -1,4 +1,4 @@
-# Aviso de Privacidade — MGC Finanças
+# Aviso de Privacidade — Margem
 
 **Versão:** 1.1 · **Última atualização:** Junho de 2026
 
@@ -14,7 +14,7 @@
 
 ## 2. Arquitetura do app e modelo de três camadas
 
-O MGC Finanças opera em **três camadas** com diferentes controladores:
+Margem opera em **três camadas** com diferentes controladores:
 
 | Camada | O que guarda | Quem controla |
 |---|---|---|
@@ -99,7 +99,7 @@ Você tem direito a:
 8. **Informação** sobre a possibilidade de não fornecer consentimento e as consequências
 9. **Revogação** do consentimento
 
-Para exercer qualquer direito, envie e-mail para **marlongc25@protonmail.com** com o assunto "Direitos LGPD — MGC Finanças". Responderemos em até **15 dias úteis**.
+Para exercer qualquer direito, envie e-mail para **marlongc25@protonmail.com** com o assunto "Direitos LGPD — Margem". Responderemos em até **15 dias úteis**.
 
 ---
 

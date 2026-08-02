@@ -1,12 +1,12 @@
-# 💰 MGC Finanças
+# 💰 Margem
 
 > **Dashboard financeiro pessoal completo, gratuito e com código-fonte disponível — sem instalação, sem servidor obrigatório.**
 
 Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
-> ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas o MGC Finanças é uma iniciativa exclusivamente pessoal.
+> ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas Margem é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.12.1-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.13.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -18,7 +18,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 O app já está publicado online. Clique e use:
 
-**[▶ Abrir o MGC Finanças](https://magoc25.github.io/mgc-financas/)**
+**[▶ Abrir Margem](https://magoc25.github.io/mgc-financas/)**
 
 Funciona em qualquer navegador moderno (Chrome, Edge, Firefox, Safari) — no celular, tablet ou computador. **Não precisa de cadastro, login, conta GitHub ou download de arquivos.** Após o primeiro acesso, o app funciona **offline**. Seus dados ficam **somente no seu dispositivo** (no armazenamento do próprio navegador).
 
@@ -34,7 +34,7 @@ Depois de abrir a URL acima, você pode instalar como aplicativo nativo, com íc
 
 ---
 
-## 🤔 Por que usar o MGC Finanças?
+## 🤔 Por que usar Margem?
 
 Se você está avaliando este app, provavelmente já viu opções na Play Store ou App Store. Antes de decidir, considere:
 
@@ -42,7 +42,7 @@ Se você está avaliando este app, provavelmente já viu opções na Play Store 
 - **Sem propagandas** — apps "gratuitos" nas lojas se sustentam exibindo anúncios. Este não.
 - **Sem prazo de expiração** — muitos apps oferecem período de teste e depois bloqueiam funcionalidades ou cobram assinatura. Este é gratuito para sempre, sem limitações.
 - **Funciona sem internet** — abre e funciona normalmente mesmo sem conexão. Sincroniza quando a internet voltar, se você quiser.
-- **Sem cadastro em lugar nenhum — nem para sincronizar** — muitos apps financeiros "gratuitos" exigem e-mail ou conta mesmo para o uso básico. O MGC Finanças abre direto no navegador, sem cadastro, sem login, sem verificação — e sincroniza entre dispositivos usando o seu próprio banco de dados Supabase, não o de uma empresa terceira.
+- **Sem cadastro em lugar nenhum — nem para sincronizar** — muitos apps financeiros "gratuitos" exigem e-mail ou conta mesmo para o uso básico. Margem abre direto no navegador, sem cadastro, sem login, sem verificação — e sincroniza entre dispositivos usando o seu próprio banco de dados Supabase, não o de uma empresa terceira.
 - **Finanças + investimentos juntos** — além do controle de despesas mês a mês, tem um módulo de **simulação de renda fixa** (Poupança, CDB, LCI/LCA, Tesouro) com foco em educação financeira.
 
 O único "custo" honesto: a instalação é um pouco mais manual do que clicar em "Instalar" na loja — mas você faz uma única vez e leva menos de 5 minutos.
@@ -63,7 +63,7 @@ Para você, basta clicar na URL pública da seção [▶ Abrir agora](#-abrir-ag
 
 ## ✨ O que é
 
-O MGC Finanças é um **arquivo HTML único** que roda direto no navegador — Chrome, Edge, Firefox ou Safari. Não precisa instalar nada, não precisa de servidor e funciona offline. Seus dados ficam no próprio dispositivo.
+Margem é um **arquivo HTML único** que roda direto no navegador — Chrome, Edge, Firefox ou Safari. Não precisa instalar nada, não precisa de servidor e funciona offline. Seus dados ficam no próprio dispositivo.
 
 Quando quiser sincronizar entre computadores ou acessar pelo celular, basta configurar o Supabase (gratuito) — opcional.
 
@@ -200,7 +200,7 @@ Vá em **Settings → Data API**:
 
 > ⚠️ **Nunca use a Secret key no dashboard.** Somente a Publishable key.
 
-#### 4. Configurar no MGC Finanças
+#### 4. Configurar no app Margem
 1. Abra o dashboard → clique em **⚙** (engrenagem no topo, ao lado do título — no celular: **⋯ Mais → ⚙ Configurar Supabase**)
 2. Cole a **Project URL** e a **Publishable key**
 3. Clique em **Salvar e conectar**

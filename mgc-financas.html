@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  MGC Finanças
+  Margem
   © 2026 MGC Dev — Marlon Gomes da Costa
   Projeto pessoal. Proibido uso comercial sem autorização.
   https://github.com/Magoc25/mgc-financas
@@ -9,14 +9,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>MGC Finanças</title>
+    <title>Margem</title>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.qrserver.com https://chart.googleapis.com; connect-src 'self' https://*.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
     <meta name="theme-color" content="#1e3a8a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="MGC Finanças">
+    <meta name="apple-mobile-web-app-title" content="Margem">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="description" content="Planejamento financeiro pessoal — MGC Finanças">
+    <meta name="description" content="Margem — planejamento financeiro pessoal">
     <link id="appleIcon" rel="apple-touch-icon" href="./icon-192.png">
     <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
     <link rel="manifest" href="./manifest.json">
@@ -1415,8 +1415,8 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // ============================================================
 // CONFIG & HELPERS
 // ============================================================
-const APP_NAME       = 'MGC Finanças'; // © 2026 MGC Dev
-const APP_VERSION    = '4.12.1'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_NAME       = 'Margem'; // © 2026 MGC Dev
+const APP_VERSION    = '4.13.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -3758,7 +3758,7 @@ window.addEventListener('appinstalled', () => {
     _pwaPrompt = null;
     localStorage.setItem('pwaInstalled', '1');
     localStorage.removeItem('pwaBannerDismissed');
-    toast('MGC Finanças instalado!', 'success');
+    toast('Margem instalada!', 'success');
 });
 
 function pwaTriggerInstall() {
@@ -4573,7 +4573,7 @@ initInvestimentos();
 
 <!-- ── INSTALL BANNER ─────────────────────────────────── -->
 <div id="installBanner">
-    <span>📲 Instalar <strong>MGC Finanças</strong> na tela inicial?</span>
+    <span>📲 Instalar <strong>Margem</strong> na tela inicial?</span>
     <div style="display:flex;gap:6px;flex-shrink:0">
         <button class="install-btn" onclick="pwaTriggerInstall()">Instalar</button>
         <button class="install-close" onclick="pwaDismissBanner()">✕</button>

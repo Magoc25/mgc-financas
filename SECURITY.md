@@ -1,4 +1,4 @@
-# Política de Segurança — MGC Finanças
+# Política de Segurança — Margem
 
 **Versão:** 1.0 · **Última atualização:** Maio de 2026
 
@@ -6,7 +6,7 @@
 
 ## 1. Arquitetura de segurança
 
-O MGC Finanças adota um modelo de **três camadas** que minimiza a exposição de dados do usuário:
+Margem adota um modelo de **três camadas** que minimiza a exposição de dados do usuário:
 
 - **Camada 1 (desenvolvedor):** código hospedado no GitHub Pages (somente leitura para o usuário); banco de dados compartilhado para avaliações e contagem anônima de dispositivos (Supabase compartilhado)
 - **Camada 2 (usuário):** todos os dados financeiros ficam no `localStorage` do dispositivo do próprio usuário — nunca saem do dispositivo sem ação explícita
@@ -67,7 +67,7 @@ Conforme o modelo de três camadas, o usuário é responsável por:
 Se você identificar uma vulnerabilidade de segurança:
 
 **E-mail:** marlongc25@protonmail.com
-**Assunto:** `[SECURITY] MGC Finanças — [descrição curta]`
+**Assunto:** `[SECURITY] Margem — [descrição curta]`
 
 Por favor, inclua:
 - Descrição da vulnerabilidade

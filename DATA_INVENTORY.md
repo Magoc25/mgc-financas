@@ -1,4 +1,4 @@
-# Inventário de Tratamento de Dados — MGC Finanças
+# Inventário de Tratamento de Dados — Margem
 
 **Agente:** Marlon Gomes da Costa · **Porte:** ATPP · **Atualizado em:** Junho de 2026
 
@@ -8,7 +8,7 @@
 
 ## Arquitetura de tratamento — visão geral
 
-O MGC Finanças opera em três camadas. **Este inventário cobre apenas o tratamento realizado pelo desenvolvedor (Camada 1).** As Camadas 2 e 3 são controladas exclusivamente pelo usuário.
+Margem opera em três camadas. **Este inventário cobre apenas o tratamento realizado pelo desenvolvedor (Camada 1).** As Camadas 2 e 3 são controladas exclusivamente pelo usuário.
 
 | Camada | Controlador | O que contém |
 |---|---|---|

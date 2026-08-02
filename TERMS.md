@@ -1,4 +1,4 @@
-# Termos de Uso — MGC Finanças
+# Termos de Uso — Margem
 
 **Versão:** 4.9.3 · **Data:** Junho de 2026
 **Desenvolvedor:** Marlon Gomes da Costa (MGC Dev) · marlongc25@protonmail.com
@@ -7,7 +7,7 @@
 
 ## 1. Uso permitido
 
-O uso do MGC Finanças é gratuito para as seguintes finalidades:
+O uso do app Margem é gratuito para as seguintes finalidades:
 
 - **Pessoal** — controle financeiro próprio, uso doméstico, familiar
 - **Educacional** — aprendizado, estudos, demonstrações em sala de aula
@@ -20,7 +20,7 @@ Não é exigido cadastro, pagamento ou autorização prévia para estes usos.
 
 ## 2. Uso comercial
 
-O uso comercial do MGC Finanças e de versões derivadas **é proibido sem autorização prévia e por escrito** do autor.
+O uso comercial do app Margem e de versões derivadas **é proibido sem autorização prévia e por escrito** do autor.
 
 São considerados uso comercial, entre outros:
 
@@ -45,13 +45,13 @@ Para licenciamento comercial: **marlongc25@protonmail.com**
 
 ## 4. Propriedade intelectual
 
-O código-fonte do MGC Finanças está disponível publicamente no GitHub. **Acesso público não equivale a cessão de direitos.**
+O código-fonte do app Margem está disponível publicamente no GitHub. **Acesso público não equivale a cessão de direitos.**
 
 O autor mantém todos os direitos sobre:
 
 - O código-fonte e sua estrutura
 - O design, a interface e a experiência de uso
-- O nome "MGC Finanças" e a identidade visual
+- O nome "Margem" (anteriormente "MGC Finanças") e a identidade visual
 
 A disponibilização pública tem finalidade educacional e de transparência — não constitui licença open source permissiva.
 
@@ -59,7 +59,7 @@ A disponibilização pública tem finalidade educacional e de transparência —
 
 ## 5. Isenção de responsabilidade
 
-O MGC Finanças é fornecido **"no estado em que se encontra"**, sem garantias de qualquer natureza, expressas ou implícitas.
+O app Margem é fornecido **"no estado em que se encontra"**, sem garantias de qualquer natureza, expressas ou implícitas.
 
 O autor não se responsabiliza por:
 
@@ -76,7 +76,7 @@ O app é uma ferramenta de organização pessoal — não substitui consultoria 
 
 ## 6. Dados e privacidade
 
-O MGC Finanças foi projetado com privacidade por padrão:
+O app Margem foi projetado com privacidade por padrão:
 
 - **Dados financeiros:** armazenados exclusivamente no `localStorage` do seu navegador ou no seu próprio projeto Supabase. O autor não tem acesso a esses dados.
 - **Chaves do Supabase:** inseridas pelo usuário na interface do app e salvas no `localStorage`. Nunca são enviadas ao desenvolvedor nem incluídas no código publicado.
@@ -94,7 +94,7 @@ Para informações detalhadas sobre coleta, finalidades, bases legais e direitos
 
 ## 7. Obrigações do usuário quanto a atualizações de segurança
 
-O usuário é responsável por instalar as atualizações do MGC Finanças quando disponibilizadas pelo desenvolvedor. O app exibe automaticamente um banner de notificação quando uma nova versão está disponível.
+O usuário é responsável por instalar as atualizações do app Margem quando disponibilizadas pelo desenvolvedor. O app exibe automaticamente um banner de notificação quando uma nova versão está disponível.
 
 A ausência de atualização pelo usuário, após notificação disponibilizada pelo app, pode configurar **culpa concorrente** nos termos do [Art. 945 do Código Civil](https://www.planalto.gov.br/ccivil_03/leis/2002/l10406compilada.htm), excluindo ou reduzindo proporcionalmente a responsabilidade do desenvolvedor por eventuais danos resultantes de vulnerabilidade que teria sido corrigida pela atualização disponibilizada.
 

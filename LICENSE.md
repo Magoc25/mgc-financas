@@ -1,4 +1,4 @@
-# Licença de Uso Não Comercial — MGC Finanças
+# Licença de Uso Não Comercial — Margem
 
 **Copyright (c) 2026 Marlon Gomes da Costa (MGC Dev)**
 
