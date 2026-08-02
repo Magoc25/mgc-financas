@@ -5,6 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.13.1] — Agosto 2026
+
+### 🐛 Correções
+- **Nome duplicado na barra de título.** Para quem instalou a 4.13.0, a janela do app mostrava "Margem · Finanças pessoais - Margem" — o Windows junta o nome do app com o título da página. Agora aparece só **Margem**.
+
+---
+
 ## [4.13.0] — Agosto 2026
 
 ### 🆕 Adicionado
