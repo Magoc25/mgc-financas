@@ -5,6 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.14.0] — Agosto 2026
+
+### 🔧 Melhorado
+- **Lançar em mês passado ficou mais rápido.** O campo **Mês** do painel "Adicionar Novo Lançamento" agora acompanha o **Mês** escolhido lá em cima. Se você voltar o filtro para julho para conferir o que faltou, o formulário já abre em julho — sem precisar escolher o mês duas vezes. Depois de salvar, ele **continua** no mês do filtro, então dá para lançar vários esquecidos de uma vez. Em "Todos os Meses", o formulário usa o mês atual. Vale igual no computador e no celular.
+
+---
+
 ## [4.13.1] — Agosto 2026
 
 ### 🐛 Correções

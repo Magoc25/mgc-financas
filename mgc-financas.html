@@ -1416,7 +1416,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'Margem'; // © 2026 MGC Dev
-const APP_VERSION    = '4.13.1'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.14.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -1844,9 +1844,9 @@ function rebuildMonthSelects() {
         newMonthSel.insertAdjacentHTML('beforeend',    `<option value="${m}">${m}</option>`);
         editMesSel.insertAdjacentHTML('beforeend',     `<option value="${m}">${m}</option>`);
     });
-    // Filtro: padrão = próximo mês; formulário: padrão = mês atual
+    // Filtro nasce no mês atual; o formulário SEGUE o filtro (_mesPadraoForm)
     filterMonthSel.value = monthNames[HISTORY_COUNT];
-    newMonthSel.value    = monthNames[HISTORY_COUNT];
+    newMonthSel.value    = _mesPadraoForm();
 }
 
 // ============================================================
@@ -2206,8 +2206,20 @@ async function inicializar() {
     _resetMesForm();
 }
 
+// O mês do filtro superior é o CONTEXTO do app: o formulário nasce nele, para
+// lançar em mês passado sem ter de escolher o mês duas vezes. Em "Todos os
+// Meses" não há mês definido → cai no mês atual. Os dois selects são montados
+// do mesmo monthNames, então todo mês do filtro existe como opção no formulário.
+function _mesPadraoForm() {
+    const f = document.getElementById('filterMonth');
+    return (f && f.value && f.value !== 'Todos') ? f.value : monthNames[HISTORY_COUNT];
+}
+
+// Fonte única do mês inicial do formulário — chamada do boot, do filtro, do
+// submit e da abertura do sheet mobile, para os quatro não divergirem (r66b).
 function _resetMesForm() {
-    document.getElementById('newMonth').value = monthNames[HISTORY_COUNT];
+    const mo = document.getElementById('newMonth');
+    if (mo) mo.value = _mesPadraoForm();
 }
 
 function resetarDados() {
@@ -2426,7 +2438,7 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
     this.reset();
     document.getElementById('newCurr').value  = 1;
     document.getElementById('newTotal').value = 1;
-    document.getElementById('newMonth').value = monthNames[HISTORY_COUNT];
+    _resetMesForm();   // volta ao mês do filtro, não ao atual — permite lançar vários no mesmo mês passado
     applyFormDefaults();
     processarDadosERenderizar();
     toast('Lançamento adicionado!', 'success');
@@ -3716,7 +3728,8 @@ function clearAllFieldErrors() {
 // ============================================================
 document.getElementById('filterCard').addEventListener('change',  renderDashboard);
 document.getElementById('filterStore').addEventListener('change', renderDashboard);
-document.getElementById('filterMonth').addEventListener('change', renderDashboard);
+// Trocar o mês no topo leva junto o mês do formulário: o filtro é o contexto do app
+document.getElementById('filterMonth').addEventListener('change', () => { _resetMesForm(); renderDashboard(); });
 
 // ============================================================
 // PWA — ICON, MANIFEST, INSTALL
@@ -3827,8 +3840,7 @@ function abrirFormSheet() {
     document.getElementById('formSheetBody').appendChild(form); // relocaliza o form REAL
     rebuildFormSelects();                                     // tipos/cartões/categorias/datalist + toggle
     applyFormDefaults();                                      // tipo mais usado + toggleFormFields no form real
-    const mo = document.getElementById('newMonth');
-    if (mo) mo.value = monthNames[HISTORY_COUNT];
+    _resetMesForm();                                          // sheet mobile abre no mês do filtro
     document.getElementById('formSheet').classList.add('open');
     setTimeout(() => { const inp = document.getElementById('newName'); if (inp) inp.focus(); }, 350);
 }
