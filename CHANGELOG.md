@@ -5,6 +5,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.16.0] — Agosto 2026
+
+### 🔧 Melhorado
+- **Botões de ação sempre à vista no Detalhamento de Faturas.** A coluna **Ações** (✎ editar, ⧉ duplicar, ✕ remover) ficava depois de *todas* as colunas de mês — para mexer numa compra era preciso arrastar a barra de rolagem até o fim da tabela e depois voltar. Agora ela fica **presa à borda direita**: role os meses à vontade que os botões continuam no mesmo lugar, na mesma linha. No celular nada muda — lá as colunas da esquerda (Cartão, Categoria, Parcela) já ocupam quase toda a largura da tela, e prender mais uma ponta não deixaria espaço para ver os valores.
+
+---
+
 ## [4.15.0] — Agosto 2026
 
 ### 🆕 Adicionado
