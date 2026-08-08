@@ -44,6 +44,8 @@
         html.dark .bg-indigo-50 { background-color: rgba(99,102,241,0.12) !important; }
         html.dark .bg-indigo-200 { background-color: rgba(99,102,241,0.25) !important; }
         html.dark .text-indigo-900 { color: #a5b4fc !important; }
+        html.dark .text-indigo-500 { color: #a5b4fc !important; }
+        html.dark .hover\:text-indigo-700:hover { color: #c7d2fe !important; }
         html.dark .bg-emerald-50 { background-color: rgba(16,185,129,0.1) !important; }
         html.dark .bg-orange-50 { background-color: rgba(249,115,22,0.1) !important; }
         html.dark .bg-red-50 { background-color: rgba(239,68,68,0.1) !important; }
@@ -245,6 +247,9 @@
         .toast-icon { font-size: 15px; flex-shrink: 0; }
 
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 10000; display: flex; align-items: center; justify-content: center; }
+        /* confirmação vem ANTES dos outros modais no DOM: sem isto ela abriria ATRÁS de
+           quem a chamou (mesmo z-index → vence a ordem do documento). */
+        #confirmModal { z-index: 10010; }
         .modal-box { background: white; border-radius: 16px; padding: 1.75rem; width: min(90vw, 460px); box-shadow: 0 24px 64px rgba(0,0,0,0.4); animation: modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
         @keyframes modalIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
@@ -521,12 +526,13 @@ on conflict (id) do nothing;</div>
 <div id="managerModal" class="modal-overlay hidden">
     <div class="modal-box" style="width:min(92vw,560px); max-height:88vh; overflow-y:auto;">
         <div class="flex justify-between items-center mb-3">
-            <h3 class="text-lg font-semibold text-gray-800" style="color:inherit">🏷 Categorias &amp; Cartões</h3>
+            <h3 class="text-lg font-semibold text-gray-800" style="color:inherit">🏷 Categorias, Cartões &amp; Descrições</h3>
             <button onclick="document.getElementById('managerModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
         <div class="flex gap-1 mb-4 border-b border-gray-200 pb-0">
             <button class="tab-btn active" id="tabBtnCat" onclick="switchManagerTab('cat')">Categorias</button>
             <button class="tab-btn" id="tabBtnCard" onclick="switchManagerTab('card')">Cartões</button>
+            <button class="tab-btn" id="tabBtnDesc" onclick="switchManagerTab('desc')">Descrições</button>
         </div>
         <!-- Panel Categorias -->
         <div id="panelCat">
@@ -544,6 +550,16 @@ on conflict (id) do nothing;</div>
             <div class="flex gap-2">
                 <input id="novoCartao" type="text" placeholder="Nome do cartão..." class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400" onkeydown="if(event.key==='Enter')adicionarCartao()">
                 <button onclick="adicionarCartao()" class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition">+ Adicionar</button>
+            </div>
+        </div>
+        <!-- Panel Descrições (sugestões do campo Descrição) -->
+        <div id="panelDesc" class="hidden">
+            <p class="text-xs text-gray-400 mb-3">Sugestões que aparecem no campo <strong>Descrição</strong> de "Adicionar Novo Lançamento". Remover uma sugestão <strong>não apaga lançamento nenhum</strong> — só limpa o autocomplete, em todos os aparelhos.</p>
+            <input id="buscaDescricao" type="text" placeholder="Filtrar sugestões..." autocomplete="off" class="w-full mb-3 px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400" oninput="renderManagerModal()">
+            <div id="descricoesList" class="flex flex-wrap gap-1 mb-3"></div>
+            <div class="flex justify-between items-center gap-2">
+                <span id="descricoesCount" class="text-xs text-gray-400"></span>
+                <button onclick="limparDescricoes()" class="px-3 py-2 text-xs bg-gray-100 text-gray-600 rounded-lg font-medium hover:bg-red-100 hover:text-red-700 transition whitespace-nowrap">Limpar todas</button>
             </div>
         </div>
     </div>
@@ -721,7 +737,10 @@ on conflict (id) do nothing;</div>
             </select>
         </div>
         <div class="md:col-span-3">
-            <label class="block text-sm font-medium text-gray-700">Descrição</label>
+            <div class="flex items-center justify-between gap-2">
+                <label class="block text-sm font-medium text-gray-700">Descrição</label>
+                <button type="button" onclick="abrirManager('desc')" title="Gerenciar as descrições sugeridas" class="text-xs font-medium text-indigo-500 hover:text-indigo-700 transition whitespace-nowrap">✎ sugestões</button>
+            </div>
             <input type="text" id="newName" required list="descSugestoes" autocomplete="off" class="mt-1 block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Conta de Luz, Loja...">
             <datalist id="descSugestoes"><!-- populated by rebuildDescricoesDatalist() --></datalist>
         </div>
@@ -1416,7 +1435,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'Margem'; // © 2026 MGC Dev
-const APP_VERSION    = '4.14.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.15.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -1496,6 +1515,11 @@ function formatCurrency(val) {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+// Nome dentro de um onclick/onchange inline (`fn('...')`): escapa para literal JS ANTES do
+// esc() de HTML. Só o esc() não basta — o apóstrofo vira &#39;, o HTML decodifica de volta
+// para ' antes de o JS ser lido, e a chamada quebra (botão morre em silêncio). Ex.: uma
+// descrição "Conta d'água".
+const escJs = s => esc(String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"));
 function isDark() { return document.documentElement.classList.contains('dark'); }
 function chartTextColor()  { return isDark() ? '#94a3b8' : '#6b7280'; }
 function chartGridColor()  { return isDark() ? '#334155' : '#e5e7eb'; }
@@ -1815,16 +1839,62 @@ function _recordDescricao(nome) {
     appData.descricoes = appData.descricoes.filter(d => (d || '').toLowerCase() !== low);
     appData.descricoes.unshift(nome);
     if (appData.descricoes.length > DESC_MAX) appData.descricoes.length = DESC_MAX;
+    // digitar de novo desfaz a remoção — e o carimbo de inclusão sai DAQUI, não só do
+    // _syncCarimbar: no aparelho que ainda não puxou a remoção a string continua no array
+    // (logo, no _snapSync), e sem este `add` o merge a apagaria de novo.
+    _descDestombar(low);
+    appData.add['desc:' + nome] = Date.now();
     rebuildDescricoesDatalist(); // reflete a nova descrição no autocomplete já nesta sessão
+}
+// Sugestão removida = tombstone do sync (`del['desc:<nome>']`, §15/SYNC_CONJUNTOS): a remoção
+// viaja para os outros aparelhos e não ressuscita na fusão. Precisa ser tombstone, e não só
+// tirar do array, porque a lista também é semeada com o nome dos lançamentos existentes — sem
+// o carimbo, a sugestão voltaria no próximo render enquanto o lançamento existisse.
+// Comparação em minúsculas: a lista deduplica sem diferenciar caixa ("Mercado" = "mercado").
+function _descRemovidas() {
+    const del = appData.del || {}, add = appData.add || {}, fora = new Set();
+    for (const k of Object.keys(del)) {
+        if (k.indexOf('desc:') !== 0) continue;
+        if ((del[k] || 0) <= (add[k] || 0)) continue;   // re-incluída depois da remoção → vale
+        fora.add(k.slice(5).toLowerCase());
+    }
+    return fora;
+}
+function _descDestombar(low) {
+    for (const k of Object.keys(appData.del || {}))
+        if (k.indexOf('desc:') === 0 && k.slice(5).toLowerCase() === low) delete appData.del[k];
 }
 function _descSugestoes() {
     // histórico explícito (mais recentes primeiro) + descrições dos lançamentos já existentes (semente)
-    const seen = new Set(), out = [];
-    const add = n => { n = (n || '').trim(); if (!n) return; const k = n.toLowerCase(); if (seen.has(k)) return; seen.add(k); out.push(n); };
+    const seen = new Set(), out = [], fora = _descRemovidas();
+    const add = n => { n = (n || '').trim(); if (!n) return; const k = n.toLowerCase(); if (seen.has(k) || fora.has(k)) return; seen.add(k); out.push(n); };
     (appData.descricoes || []).forEach(add);
     [appData.faturas, appData.fixas, appData.rendas, appData.dividas, appData.rendasExtras]
         .forEach(arr => (arr || []).forEach(it => add(it && it.name)));
     return out.slice(0, 300);
+}
+function removerDescricao(nome) {
+    const low = String(nome || '').trim().toLowerCase();
+    if (!low) return;
+    const agora = Date.now();
+    if (!appData.del) appData.del = {};
+    appData.del['desc:' + nome] = agora;
+    (appData.descricoes || []).forEach(d => { if ((d || '').toLowerCase() === low) appData.del['desc:' + d] = agora; });
+    appData.descricoes = (appData.descricoes || []).filter(d => (d || '').toLowerCase() !== low);
+    salvarDados(); rebuildDescricoesDatalist(); renderManagerModal();
+}
+function limparDescricoes() {
+    const lista = _descSugestoes();
+    if (!lista.length) { toast('Não há sugestões para limpar.', 'info'); return; }
+    showConfirm(`Remover as ${lista.length} sugestões de descrição? Os lançamentos NÃO são afetados — some só o autocomplete.`, () => {
+        const agora = Date.now();
+        if (!appData.del) appData.del = {};
+        lista.forEach(n => { appData.del['desc:' + n] = agora; });
+        (appData.descricoes || []).forEach(d => { appData.del['desc:' + d] = agora; });
+        appData.descricoes = [];
+        salvarDados(); rebuildDescricoesDatalist(); renderManagerModal();
+        toast('Sugestões de descrição limpas.', 'warning');
+    });
 }
 function rebuildDescricoesDatalist() {
     const dl = document.getElementById('descSugestoes');
@@ -1970,6 +2040,8 @@ let _managerTab = 'cat';
 
 function abrirManager(tab) {
     _managerTab = tab || 'cat';
+    const busca = document.getElementById('buscaDescricao');
+    if (busca) busca.value = '';   // filtro de sessão anterior esconderia a lista inteira
     renderManagerModal();
     document.getElementById('managerModal').classList.remove('hidden');
 }
@@ -1983,32 +2055,46 @@ function renderManagerModal() {
     // Tabs
     document.getElementById('tabBtnCat').className  = `tab-btn ${_managerTab === 'cat'  ? 'active' : ''}`;
     document.getElementById('tabBtnCard').className = `tab-btn ${_managerTab === 'card' ? 'active' : ''}`;
+    document.getElementById('tabBtnDesc').className = `tab-btn ${_managerTab === 'desc' ? 'active' : ''}`;
     document.getElementById('panelCat').classList.toggle('hidden',  _managerTab !== 'cat');
     document.getElementById('panelCard').classList.toggle('hidden', _managerTab !== 'card');
+    document.getElementById('panelDesc').classList.toggle('hidden', _managerTab !== 'desc');
 
     if (_managerTab === 'cat') {
         const cats = getCategorias();
         const limites = appData.limites || {};
         document.getElementById('categoriasList').innerHTML = cats.map(cat => {
             const removeBtn = cats.length > 1
-                ? `<button class="tag-remove" onclick="removerCategoria('${esc(cat)}')" title="Remover">✕</button>`
+                ? `<button class="tag-remove" onclick="removerCategoria('${escJs(cat)}')" title="Remover">✕</button>`
                 : `<span class="text-xs text-gray-300">única</span>`;
             const limite = limites[cat] || '';
             return `<div class="manager-tag">
                 <span style="width:8px;height:8px;border-radius:50%;background:${getColor(cat)};display:inline-block;flex-shrink:0"></span>
                 ${esc(cat)}
                 <input class="limit-input" type="number" min="0" step="50" placeholder="Limite R$" value="${limite}"
-                    onchange="salvarLimite('${esc(cat)}', this.value)" title="Limite mensal (R$)">
+                    onchange="salvarLimite('${escJs(cat)}', this.value)" title="Limite mensal (R$)">
                 ${removeBtn}
             </div>`;
         }).join('');
-    } else {
+    } else if (_managerTab === 'card') {
         const cartoes = getCartoes();
         document.getElementById('cartoesList').innerHTML = cartoes.map(card => `
             <div class="manager-tag">
                 ${esc(card)}
-                ${cartoes.length > 1 ? `<button class="tag-remove" onclick="removerCartao('${esc(card)}')" title="Remover">✕</button>` : `<span class="text-xs text-gray-300">único</span>`}
+                ${cartoes.length > 1 ? `<button class="tag-remove" onclick="removerCartao('${escJs(card)}')" title="Remover">✕</button>` : `<span class="text-xs text-gray-300">único</span>`}
             </div>`).join('');
+    } else {
+        const busca  = (document.getElementById('buscaDescricao').value || '').trim().toLowerCase();
+        const todas  = _descSugestoes();
+        const lista  = busca ? todas.filter(n => n.toLowerCase().includes(busca)) : todas;
+        document.getElementById('descricoesList').innerHTML = lista.length
+            ? lista.map(n => `<div class="manager-tag">
+                ${esc(n)}
+                <button class="tag-remove" onclick="removerDescricao('${escJs(n)}')" title="Remover sugestão">✕</button>
+            </div>`).join('')
+            : `<p class="text-xs text-gray-400 italic py-2">${todas.length ? 'Nenhuma sugestão corresponde ao filtro.' : 'Nenhuma sugestão guardada ainda — elas nascem dos lançamentos que você cria.'}</p>`;
+        document.getElementById('descricoesCount').textContent =
+            todas.length ? `${lista.length} de ${todas.length} ${todas.length === 1 ? 'sugestão' : 'sugestões'}` : '';
     }
 }
 
@@ -2026,16 +2112,18 @@ function adicionarCategoria() {
 function removerCategoria(nome) {
     if (appData.categorias.length <= 1) { toast('Precisa de pelo menos 1 categoria.', 'error'); return; }
     appData.categorias = appData.categorias.filter(c => c !== nome);
-    delete appData.limites[nome];
+    appData.limites[nome] = 0;   // zera em vez de apagar (§15: ausência não apaga no merge)
     salvarDados(); rebuildFormSelects(); renderManagerModal();
     toast(`Categoria "${nome}" removida.`, 'warning');
 }
 
+// Limpar o limite grava 0, nunca `delete`: mapa sincronizado apaga por VALOR, não por
+// ausência (§15 — mesma armadilha do carryForward). Todo leitor de `limites` já trata 0
+// como "sem limite".
 function salvarLimite(cat, valor) {
     const v = parseFloat(valor) || 0;
     if (!appData.limites) appData.limites = {};
-    if (v > 0) appData.limites[cat] = v;
-    else delete appData.limites[cat];
+    appData.limites[cat] = v > 0 ? v : 0;
     salvarDados();
 }
 
@@ -2604,7 +2692,7 @@ function renderPagamentos() {
             const pago = p.cartoes.includes(card);
             totalGeral += val;
             if (pago) totalPago += val;
-            cartoesHtml += `<div class="pag-item ${pago ? 'pago' : ''}" onclick="togglePagCartao('${esc(card)}')">
+            cartoesHtml += `<div class="pag-item ${pago ? 'pago' : ''}" onclick="togglePagCartao('${escJs(card)}')">
                 <input type="checkbox" ${pago ? 'checked' : ''}>
                 <span class="pag-nome">${esc(card)}</span>
                 <span class="pag-valor">${formatCurrency(val)}</span>
@@ -2735,41 +2823,7 @@ function processarDadosERenderizar() {
     animateKpi('valorRenda', RENDA_MENSAL);
     animateKpi('valorFixas', TOTAL_FIXED);
 
-    // Rendas table
     const thStyle = 'px-2 py-1.5 text-left text-xs font-semibold text-gray-500 sort-th border-b border-gray-100';
-    document.getElementById('rendasHead').innerHTML = `<tr>
-        <th class="${thStyle}" onclick="sortarTabela('rendas','name')">Nome ${getSortIcon('rendas','name')}</th>
-        <th class="${thStyle} text-right" onclick="sortarTabela('rendas','amount')">Valor ${getSortIcon('rendas','amount')}</th>
-        <th class="px-2 py-1.5 w-16"></th></tr>`;
-    let rendasHTML = '';
-    aplicarSort(appData.rendas.map((item, i) => ({...item, _i: i})), 'rendas').forEach(item => {
-        rendasHTML += `<tr class="hover:bg-gray-50 text-gray-700">
-            <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)}</td>
-            <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-emerald-600">${formatCurrency(item.amount)}</td>
-            <td class="px-1 py-2 text-center w-16">
-                <button onclick="editarItem('renda',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
-                <button onclick="duplicarItem('renda',${item._i})" class="action-btn text-green-400 hover:text-green-700" title="Duplicar">⧉</button>
-                <button onclick="removerItem('renda',${item._i})" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
-            </td></tr>`;
-    });
-    // Renda extra (por mês) — listada abaixo das recorrentes, com selo do mês
-    const _extras = appData.rendasExtras.map((item, i) => ({ ...item, _i: i }));
-    if (_extras.length) {
-        rendasHTML += `<tr><td colspan="3" class="px-2 pt-3 pb-1 text-[10px] font-semibold text-teal-500 uppercase tracking-wider">Renda extra (mês específico)</td></tr>`;
-        _extras.forEach(item => {
-            rendasHTML += `<tr class="hover:bg-gray-50 text-gray-700">
-                <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)} <span class="text-xs text-teal-500">(${esc(item.mes || '—')})</span></td>
-                <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-teal-600">${formatCurrency(item.amount)}</td>
-                <td class="px-1 py-2 text-center w-16">
-                    <button onclick="editarItem('rendaExtra',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
-                    <button onclick="duplicarItem('rendaExtra',${item._i})" class="action-btn text-green-400 hover:text-green-700" title="Duplicar">⧉</button>
-                    <button onclick="removerItem('rendaExtra',${item._i})" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
-                </td></tr>`;
-        });
-    }
-    if (!rendasHTML) rendasHTML = `<tr><td colspan="3" class="px-2 py-3 text-center text-gray-400 text-xs italic">Nenhuma renda cadastrada</td></tr>`;
-    document.getElementById('rendasBody').innerHTML = rendasHTML;
-    document.getElementById('rendasTotal').textContent = formatCurrency(RENDA_MENSAL);
 
     // Fixas table
     document.getElementById('fixasHead').innerHTML = `<tr>
@@ -2913,7 +2967,9 @@ function renderDashboard() {
     _safeRender(() => renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals), 'fluxoCaixa');
     _safeRender(() => renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc, rendaExtraMes, carriedMes), 'narrativa');
 
-    // Tables
+    // Tables — daqui (e não de processarDadosERenderizar) porque as tabelas por mês
+    // têm de acompanhar o filtro do topo, que chama só o renderDashboard.
+    renderRendasTable(selectedMonthIndex);
     renderDividasTable(selectedMonthIndex);
     renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTotals, selectedMonthIndex);
 
@@ -2932,6 +2988,7 @@ function renderAlertBanner(categoryTotals, mesRef) {
 
     for (const cat in limites) {
         const limite = limites[cat];
+        if (!(limite > 0)) continue;   // 0 = limite limpo (não é limite de zero reais)
         const atual  = categoryTotals[cat] || 0;
         if (atual > limite) {
             alerts.push(`<span class="alert-chip">⚠ ${esc(cat)}: ${formatCurrency(atual)} / limite ${formatCurrency(limite)}</span>`);
@@ -3242,6 +3299,51 @@ function renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals) {
     });
 }
 
+// Fontes de Renda — recorrentes (valem todo mês) + renda extra DO MÊS FILTRADO.
+// A renda extra é lançada para um mês específico: mostrá-la em qualquer mês fazia a
+// lista mentir sobre o mês em tela. Mesma convenção da tabela de dívidas: índice -1
+// ("Todos os Meses") lista todas, para continuar dando para editar/remover as demais.
+function renderRendasTable(selectedMonthIndex) {
+    const thStyle = 'px-2 py-1.5 text-left text-xs font-semibold text-gray-500 sort-th border-b border-gray-100';
+    document.getElementById('rendasHead').innerHTML = `<tr>
+        <th class="${thStyle}" onclick="sortarTabela('rendas','name')">Nome ${getSortIcon('rendas','name')}</th>
+        <th class="${thStyle} text-right" onclick="sortarTabela('rendas','amount')">Valor ${getSortIcon('rendas','amount')}</th>
+        <th class="px-2 py-1.5 w-16"></th></tr>`;
+    let rendasHTML = '';
+    aplicarSort(appData.rendas.map((item, i) => ({...item, _i: i})), 'rendas').forEach(item => {
+        rendasHTML += `<tr class="hover:bg-gray-50 text-gray-700">
+            <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)}</td>
+            <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-emerald-600">${formatCurrency(item.amount)}</td>
+            <td class="px-1 py-2 text-center w-16">
+                <button onclick="editarItem('renda',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
+                <button onclick="duplicarItem('renda',${item._i})" class="action-btn text-green-400 hover:text-green-700" title="Duplicar">⧉</button>
+                <button onclick="removerItem('renda',${item._i})" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
+            </td></tr>`;
+    });
+    // Renda extra (por mês) — listada abaixo das recorrentes, com selo do mês
+    const _extras = appData.rendasExtras
+        .map((item, i) => ({ ...item, _i: i }))
+        .filter(item => selectedMonthIndex === -1 || monthNames.indexOf(item.mes) === selectedMonthIndex);
+    if (_extras.length) {
+        rendasHTML += `<tr><td colspan="3" class="px-2 pt-3 pb-1 text-[10px] font-semibold text-teal-500 uppercase tracking-wider">Renda extra (mês específico)</td></tr>`;
+        _extras.forEach(item => {
+            rendasHTML += `<tr class="hover:bg-gray-50 text-gray-700">
+                <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)} <span class="text-xs text-teal-500">(${esc(item.mes || '—')})</span></td>
+                <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-teal-600">${formatCurrency(item.amount)}</td>
+                <td class="px-1 py-2 text-center w-16">
+                    <button onclick="editarItem('rendaExtra',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
+                    <button onclick="duplicarItem('rendaExtra',${item._i})" class="action-btn text-green-400 hover:text-green-700" title="Duplicar">⧉</button>
+                    <button onclick="removerItem('rendaExtra',${item._i})" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
+                </td></tr>`;
+        });
+    }
+    if (!rendasHTML) rendasHTML = `<tr><td colspan="3" class="px-2 py-3 text-center text-gray-400 text-xs italic">Nenhuma renda cadastrada</td></tr>`;
+    document.getElementById('rendasBody').innerHTML = rendasHTML;
+    // TOTAL = renda recorrente (o KPI "Renda Mensal"); a extra do mês entra à parte,
+    // como já entra no saldo/gráficos por _rendaExtraArr.
+    document.getElementById('rendasTotal').textContent = formatCurrency(RENDA_MENSAL);
+}
+
 function renderDividasTable(selectedMonthIndex) {
     const thBase = 'px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100';
     const mkTh = (col, label) => {
@@ -3492,10 +3594,13 @@ function planSetDividaAdicional(val) {
     renderPlanejamento();
 }
 
-// Marca/desmarca o carry-forward de um mês (sem cascata: só o mês marcado puxa o anterior)
+// Marca/desmarca o carry-forward de um mês (sem cascata: só o mês marcado puxa o anterior).
+// Desmarcar grava FALSE — nunca `delete`. carryForward é mapa sincronizado (SYNC_MAPAS) e
+// o merge é UNIÃO DE CHAVES: "ausência NUNCA apaga" (§15). Apagar a chave deixava a versão
+// da nuvem intacta, e o merge seguinte remarcava o mês sozinho — o check voltava ao desmarcar
+// o mês vizinho e os meses reapareciam marcados a cada reabertura do app.
 function planToggleCarry(mes) {
-    if (appData.carryForward[mes]) delete appData.carryForward[mes];
-    else appData.carryForward[mes] = true;
+    appData.carryForward[mes] = !appData.carryForward[mes];
     salvarDados();
     processarDadosERenderizar();
 }

@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas Margem é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.14.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.15.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -74,15 +74,17 @@ Quando quiser sincronizar entre computadores ou acessar pelo celular, basta conf
 ### Entradas e Saídas
 - Registro de **receitas** e **despesas** com categoria, cartão e mês de referência
 - **Filtro por mês** com navegação rápida
+- **Sugestões na descrição**: o app guarda o que você já digitou e completa sozinho — com uma aba para apagar as sugestões erradas ou repetidas
 - **Modo compacto** para visualização reduzida
 
 ### Dívidas e Parcelamentos
 - Cadastro de dívidas com valor, credor e status
 - Controle de **faturas** com vencimento e situação (paga / em aberto)
 
-### Categorias & Cartões
+### Categorias, Cartões & Descrições
 - Categorias personalizadas com ícone e cor
 - Cartões de crédito/débito com nome e bandeira
+- Sugestões de descrição do formulário, com busca e remoção
 - Gerenciamento em modal dedicado com abas
 
 ### Orçamentos

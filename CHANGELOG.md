@@ -5,6 +5,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.15.0] — Agosto 2026
+
+### 🆕 Adicionado
+- **Apagar sugestões da Descrição.** O campo **Descrição** de "Adicionar Novo Lançamento" guarda o que você já digitou para completar sozinho — e agora dá para **limpar essa lista**. No próprio campo há o atalho **✎ sugestões**, que abre a aba **Descrições** (dentro de 🏷 Categorias, Cartões & Descrições): busque, remova uma a uma no ✕ ou use **Limpar todas**. Serve para tirar do caminho o que foi digitado errado ou ficou repetido. Remover uma sugestão **não apaga lançamento nenhum** — some só do autocomplete, e a remoção vale em todos os aparelhos. Se você digitar a descrição de novo, ela volta para a lista.
+
+### 🔧 Melhorado
+- **Renda extra agora aparece só no mês dela.** No painel **Fontes de Renda**, as entradas de "Renda Extra (mês específico)" apareciam em qualquer mês selecionado lá em cima. Agora acompanham o filtro: uma renda extra lançada para jun/26 só é listada com **Jun/26** escolhido. Em **"Todos os Meses"** todas continuam visíveis, para você conseguir editar ou remover as dos outros meses. As rendas recorrentes seguem aparecendo sempre, como antes.
+
+### 🐛 Correções
+- **"Trazer déficit" parava de desmarcar sozinho.** No painel **Planejamento de Quitação**, desmarcar um mês não durava: o check voltava ao mexer no mês vizinho e, ao fechar e reabrir o app, os meses reapareciam marcados. Motivo: desmarcar **apagava** a informação em vez de gravar "desligado", e como a sincronização só sabe **juntar** o que cada aparelho tem, a versão antiga da nuvem remarcava o mês na sincronização seguinte. Agora o desmarcado é gravado como tal e permanece — inclusive no outro aparelho.
+- **Limite de categoria apagado voltava sozinho.** Mesma causa do item acima, em 🏷 Categorias: limpar o limite mensal de uma categoria não se mantinha entre aparelhos.
+- **Nome com apóstrofo quebrava os botões.** Categoria, cartão ou descrição com `'` no nome (ex.: "Conta d'água") deixava os botões de remover sem reação.
+
+---
+
 ## [4.14.0] — Agosto 2026
 
 ### 🔧 Melhorado
