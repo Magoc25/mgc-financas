@@ -474,6 +474,11 @@
                 <label class="block text-xs font-medium text-gray-500 mb-1">Mês de Início</label>
                 <select id="editMes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none"></select>
             </div>
+            <div id="editDiaRow" style="display:none">
+                <label class="block text-xs font-medium text-gray-500 mb-1">Dia da compra <span class="text-gray-400 font-normal">(opcional)</span></label>
+                <input id="editDia" type="number" min="1" max="31" step="1" placeholder="—" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none">
+                <p class="text-[11px] text-gray-400 mt-1">Deixe vazio se não lembrar. Só serve para o gráfico de compras por dia — não muda valor nem parcela.</p>
+            </div>
         </div>
         <div class="flex justify-end gap-3 mt-5">
             <button id="editCancelBtn" class="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition">Cancelar</button>
@@ -538,6 +543,31 @@ on conflict (id) do nothing;</div>
 </div>
 
 <!-- MANAGER MODAL (Categorias & Cartões) -->
+<!-- Preencher datas em massa — as compras lançadas antes da v4.17.0 não têm dia -->
+<div id="datasModal" class="modal-overlay hidden">
+    <div class="modal-box" style="width:min(92vw,620px); max-height:88vh; overflow-y:auto;">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="text-lg font-semibold text-gray-800" style="color:inherit">📅 Preencher datas das compras</h3>
+            <button onclick="document.getElementById('datasModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        </div>
+        <p class="text-xs text-gray-400 mb-3">Compras sem dia no mês <strong id="datasMesRotulo"></strong>. O dia serve só para o gráfico de compras por data — <strong>não muda valor, parcela nem mês</strong>. Pode deixar em branco o que não lembrar.</p>
+        <div class="flex items-center gap-2 mb-3 flex-wrap">
+            <label class="text-xs text-gray-500">Aplicar a todas:</label>
+            <input id="datasTodos" type="number" min="1" max="31" step="1" placeholder="dia" class="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400">
+            <button onclick="aplicarDiaTodas()" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-600 rounded-lg font-medium hover:bg-indigo-100 hover:text-indigo-700 transition">Preencher tudo</button>
+            <span class="text-[11px] text-gray-400">útil quando o lote foi todo no mesmo dia</span>
+        </div>
+        <div id="datasLista" class="space-y-1 mb-4"></div>
+        <div class="flex justify-between items-center gap-2">
+            <span id="datasResumo" class="text-xs text-gray-400"></span>
+            <div class="flex gap-2">
+                <button onclick="document.getElementById('datasModal').classList.add('hidden')" class="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition">Cancelar</button>
+                <button onclick="salvarDatas()" class="px-5 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium transition shadow-sm">Salvar datas</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="managerModal" class="modal-overlay hidden">
     <div class="modal-box" style="width:min(92vw,560px); max-height:88vh; overflow-y:auto;">
         <div class="flex justify-between items-center mb-3">
@@ -780,6 +810,13 @@ on conflict (id) do nothing;</div>
         <div class="md:col-span-2" id="divNewMonth">
             <label class="block text-sm font-medium text-gray-700">Mês</label>
             <select id="newMonth" autocomplete="off" class="mt-1 block w-full pl-3 pr-8 py-2 text-sm border-gray-300 rounded-md border focus:ring-indigo-500 focus:border-indigo-500"></select>
+        </div>
+        <div class="md:col-span-1" id="divNewDia">
+            <div class="flex items-center justify-between gap-1">
+                <label class="block text-sm font-medium text-gray-700">Dia</label>
+                <button type="button" onclick="preencherDiaHoje()" title="Usar o dia de hoje" class="text-xs font-medium text-indigo-500 hover:text-indigo-700 transition">hoje</button>
+            </div>
+            <input type="number" id="newDia" min="1" max="31" step="1" autocomplete="off" placeholder="—" title="Dia da compra (opcional) — fica guardado até você mudar" class="mt-1 block w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
         </div>
         <div class="md:col-span-12 flex justify-between items-center gap-3 mt-2">
             <button type="button" onclick="resetarDados()" class="px-3 py-2 text-xs bg-gray-100 text-gray-600 rounded-md font-medium hover:bg-red-100 hover:text-red-700 transition">⚠ Apagar Todos os Dados</button>
@@ -1093,7 +1130,11 @@ on conflict (id) do nothing;</div>
         </div>
     </div>
     <div class="bg-white p-6 rounded-lg shadow-md lg:col-span-3">
-        <h2 class="text-lg font-semibold text-gray-700 mb-4">Detalhamento Faturas de Cartão</h2>
+        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <h2 class="text-lg font-semibold text-gray-700">Detalhamento Faturas de Cartão</h2>
+            <button id="btnDatas" onclick="abrirDatasModal()" style="display:none"
+                    class="px-3 py-1.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-medium hover:bg-amber-100 transition whitespace-nowrap"></button>
+        </div>
         <div class="table-container border border-gray-200 rounded-md">
             <table class="min-w-full divide-y divide-gray-200 text-sm" id="dataTable">
                 <thead class="bg-gray-50"></thead>
@@ -1450,7 +1491,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'Margem'; // © 2026 MGC Dev
-const APP_VERSION    = '4.16.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.17.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -1558,6 +1599,13 @@ function normalizarAppData(data) {
     if (!data.historico)  data.historico = [];
     if (!data.pagamentos) data.pagamentos = {};
     if (!Array.isArray(data.descricoes)) data.descricoes = []; // histórico de descrições p/ autocomplete (sincronizado no blob)
+    // Dia da compra (v4.17.0) — opcional. Saneia o que vier de backup editado à mão ou de
+    // aparelho mais antigo: fora de 1..31 vira ausente, e não um dia impossível no gráfico.
+    (data.faturas || []).forEach(f => {
+        if (f.dia === undefined || f.dia === null || f.dia === '') { delete f.dia; return; }
+        const n = parseInt(f.dia, 10);
+        if (n >= 1 && n <= 31) f.dia = n; else delete f.dia;
+    });
     // Renda extra por mês + carry-forward do déficit + estado do simulador (v4.10.0)
     if (!Array.isArray(data.rendasExtras))                        data.rendasExtras = [];
     if (!data.carryForward || typeof data.carryForward !== 'object') data.carryForward = {};
@@ -2007,7 +2055,9 @@ function editarItem(tipo, index) {
     document.getElementById('editParcelasRow').style.display  = showParcelas ? '' : 'none';
     document.getElementById('editMesRow').style.display       = showMes      ? '' : 'none';
     document.getElementById('editCategoriaRow').style.display = showCat      ? '' : 'none';
+    document.getElementById('editDiaRow').style.display       = showCat      ? '' : 'none';   // dia = só fatura
 
+    if (showCat) document.getElementById('editDia').value = data.dia || '';
     if (showParcelas) { document.getElementById('editCurr').value = data.curr; document.getElementById('editTotal').value = data.total; }
     if (showMes) document.getElementById('editMes').value = (tipo === 'rendaExtra' ? data.mes : data.mesInicio) || monthNames[HISTORY_COUNT];
     if (showCat) document.getElementById('editCategoria').value = data.category || 'Outros';
@@ -2037,7 +2087,14 @@ document.getElementById('editSaveBtn').onclick = () => {
         const curr  = parseInt(document.getElementById('editCurr').value);
         const total = parseInt(document.getElementById('editTotal').value);
         if (curr > total) { document.getElementById('editCurr').classList.add('field-error'); toast('Parcela atual não pode ser maior que o total.', 'error'); return; }
-        appData.faturas[index] = { ...appData.faturas[index], name: nome, amount: valor, curr, total,
+        const diaEditTxt = document.getElementById('editDia').value.trim();
+        const diaEdit    = _diaValido(diaEditTxt);
+        if (diaEditTxt && diaEdit === null) { document.getElementById('editDia').classList.add('field-error'); toast('Dia deve ser entre 1 e 31.', 'error'); return; }
+        document.getElementById('editDia').classList.remove('field-error');
+        // `dia: undefined` some no JSON = campo ausente. NÃO é o caso do r78a (mapa fundido por
+        // união de chaves): fatura é item de coleção fundida por id, e o item mais novo substitui
+        // o antigo inteiro — limpar o dia propaga normalmente.
+        appData.faturas[index] = { ...appData.faturas[index], name: nome, amount: valor, curr, total, dia: diaEdit || undefined,
             category: document.getElementById('editCategoria').value, mesInicio: document.getElementById('editMes').value };
     }
     logHistorico('edit', tipo, nome, valor);
@@ -2325,6 +2382,99 @@ function _resetMesForm() {
     if (mo) mo.value = _mesPadraoForm();
 }
 
+// ── Dia da compra ────────────────────────────────────────────────────────────
+// Ao contrário do mês (que RESETA para o filtro a cada envio), o dia PERMANECE:
+// lançar várias compras da mesma data é o caso comum, e retypar o dia toda vez
+// seria o atrito que este campo existe para evitar. Vive só na sessão — persistir
+// entre dias faria a compra de hoje nascer com o dia da semana passada.
+let _diaLembrado = '';
+function _diaValido(v) {
+    const n = parseInt(v, 10);
+    return (n >= 1 && n <= 31) ? n : null;
+}
+// Nasce VAZIO de propósito: nada de preencher "hoje" sozinho. Com o lançamento
+// retroativo da v4.14.0, um padrão automático gravaria data errada em silêncio —
+// exatamente o defeito que trouxe este campo à existência. Quem quer hoje, clica.
+function _resetDiaForm() {
+    const d = document.getElementById('newDia');
+    if (d) d.value = _diaLembrado;
+}
+function preencherDiaHoje() {
+    const d = document.getElementById('newDia');
+    if (!d) return;
+    d.value = String(new Date().getDate());
+    _diaLembrado = d.value;
+}
+
+// ── Preenchimento em massa das compras antigas ───────────────────────────────
+// Nenhum lançamento anterior à v4.17.0 tem dia, e não há de onde derivá-lo: o
+// carimbo do histórico é a hora em que se DIGITOU, não a da compra. Inventar
+// data seria pior que não ter. Então: preenchimento manual, mês a mês, numa
+// tela só — o que o mês em tela não cobrir fica para depois, sem bloquear nada.
+// Índice ORIGINAL vai junto: a lista é filtrada, e gravar por posição da lista
+// escreveria na fatura errada.
+function _faturasSemData(mes) {
+    return (appData.faturas || [])
+        .map((f, i) => ({ f, i }))
+        .filter(x => x.f.mesInicio === mes && !x.f.dia);
+}
+// O convite aparece só quando há o que preencher e some sozinho ao terminar —
+// aviso fixo o usuário aprende a ignorar; contador que muda, não.
+function renderBotaoDatas() {
+    const b = document.getElementById('btnDatas');
+    if (!b) return;
+    const n = _faturasSemData(_mesPadraoForm()).length;
+    b.style.display = n ? '' : 'none';
+    b.textContent   = `📅 Preencher datas (${n})`;
+    b.title = `${n} ${n === 1 ? 'compra deste mês está sem data' : 'compras deste mês estão sem data'} — sem elas o gráfico de compras por dia fica incompleto`;
+}
+function abrirDatasModal() {
+    renderDatasModal();
+    document.getElementById('datasModal').classList.remove('hidden');
+}
+function renderDatasModal() {
+    const mes   = _mesPadraoForm();
+    const itens = _faturasSemData(mes);
+    document.getElementById('datasMesRotulo').textContent = mes;
+    document.getElementById('datasLista').innerHTML = itens.length
+        ? itens.map(x => `<div class="flex items-center gap-2 py-1.5 border-b border-gray-100">
+            <input type="number" min="1" max="31" step="1" placeholder="—" data-fat="${x.i}"
+                   class="datas-dia w-16 px-2 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400 flex-shrink-0">
+            <div class="min-w-0 flex-1">
+                <div class="text-sm font-medium truncate">${esc(x.f.name)}</div>
+                <div class="text-[11px] text-gray-400 truncate">${esc(x.f.card)} · ${esc(x.f.category || '—')} · ${x.f.curr}/${x.f.total}</div>
+            </div>
+            <span class="text-sm text-gray-500 flex-shrink-0">${formatCurrency(x.f.amount)}</span>
+        </div>`).join('')
+        : `<p class="text-xs text-gray-400 italic py-3">Nenhuma compra sem data neste mês — está tudo preenchido. 🎉</p>`;
+    document.getElementById('datasResumo').textContent = itens.length
+        ? `${itens.length} ${itens.length === 1 ? 'compra sem data' : 'compras sem data'}`
+        : '';
+}
+function aplicarDiaTodas() {
+    const v = _diaValido(document.getElementById('datasTodos').value);
+    if (!v) { toast('Informe um dia entre 1 e 31.', 'error'); return; }
+    document.querySelectorAll('#datasLista .datas-dia').forEach(el => { el.value = String(v); });
+}
+function salvarDatas() {
+    const campos = [...document.querySelectorAll('#datasLista .datas-dia')];
+    const invalido = campos.find(el => el.value.trim() && _diaValido(el.value) === null);
+    if (invalido) { invalido.classList.add('field-error'); toast('Dia deve ser entre 1 e 31.', 'error'); return; }
+    let n = 0;
+    campos.forEach(el => {
+        const dia = _diaValido(el.value);
+        if (!dia) return;                                  // vazio = continua sem data, sem erro
+        const idx = parseInt(el.getAttribute('data-fat'), 10);
+        if (appData.faturas[idx]) { appData.faturas[idx].dia = dia; n++; }
+    });
+    if (!n) { toast('Nenhuma data preenchida.', 'info'); return; }
+    salvarDados();
+    logHistorico('editar', 'fatura', `datas preenchidas (${n})`);
+    processarDadosERenderizar();
+    renderDatasModal();
+    toast(`${n} ${n === 1 ? 'data preenchida' : 'datas preenchidas'}.`, 'success');
+}
+
 function resetarDados() {
     showConfirm("Tem certeza que deseja apagar TODOS os dados? Essa ação não pode ser desfeita.", () => {
         appData = normalizarAppData({});
@@ -2359,9 +2509,9 @@ function exportarCSV() {
     csv += '\nDÍVIDAS EXTRAS\nNome,Valor,Mês Início\n';
     appData.dividas.forEach(d => { csv += `${escape(d.name)},${d.amount},${d.mesInicio || ''}\n`; });
 
-    csv += '\nFATURAS DE CARTÃO\nCartão,Descrição,Categoria,Valor Parcela,Parcela Atual,Total Parcelas,Mês Início\n';
+    csv += '\nFATURAS DE CARTÃO\nCartão,Descrição,Categoria,Valor Parcela,Parcela Atual,Total Parcelas,Mês Início,Dia\n';
     appData.faturas.forEach(f => {
-        csv += `${escape(f.card)},${escape(f.name)},${escape(f.category)},${f.amount},${f.curr},${f.total},${f.mesInicio || ''}\n`;
+        csv += `${escape(f.card)},${escape(f.name)},${escape(f.category)},${f.amount},${f.curr},${f.total},${f.mesInicio || ''},${f.dia || ''}\n`;
     });
 
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -2497,6 +2647,7 @@ function toggleFormFields() {
     show('divNewCurr',     isCard);
     show('divNewTotal',    isCard);
     show('divNewCategory', isCard);
+    show('divNewDia',      isCard);   // o dia é da COMPRA no cartão; fixa/renda são recorrentes
     show('divNewMonth',    isCard || tipo === 'Divida' || tipo === 'RendaExtra');
     if (!isCard) { document.getElementById('newCurr').value = 1; document.getElementById('newTotal').value = 1; }
 }
@@ -2530,7 +2681,14 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
         const curr  = parseInt(document.getElementById('newCurr').value);
         const total = parseInt(document.getElementById('newTotal').value);
         if (curr > total) { setFieldError('newCurr', 'Parcela atual > total.'); return; }
-        appData.faturas.push({ card: tipo, name: nome, category: categoria, amount: valor, curr, total, mesInicio: mes });
+        const diaEl  = document.getElementById('newDia');
+        const diaTxt = diaEl ? diaEl.value.trim() : '';
+        const dia    = _diaValido(diaTxt);
+        if (diaTxt && dia === null) { setFieldError('newDia', 'Dia deve ser entre 1 e 31.'); return; }
+        _diaLembrado = dia ? String(dia) : '';   // guarda a escolha para o próximo lançamento
+        const nova = { card: tipo, name: nome, category: categoria, amount: valor, curr, total, mesInicio: mes };
+        if (dia) nova.dia = dia;                 // sem dia = sem campo (não inventa data)
+        appData.faturas.push(nova);
     }
 
     const _tipoHist = tipo === 'Fixa' ? 'fixa' : tipo === 'Renda' ? 'renda' : tipo === 'RendaExtra' ? 'rendaExtra' : tipo === 'Divida' ? 'divida' : 'fatura';
@@ -2542,6 +2700,7 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
     document.getElementById('newCurr').value  = 1;
     document.getElementById('newTotal').value = 1;
     _resetMesForm();   // volta ao mês do filtro, não ao atual — permite lançar vários no mesmo mês passado
+    _resetDiaForm();   // o dia SOBREVIVE ao reset() — vários lançamentos da mesma data
     applyFormDefaults();
     processarDadosERenderizar();
     toast('Lançamento adicionado!', 'success');
@@ -2985,6 +3144,7 @@ function renderDashboard() {
     // Tables — daqui (e não de processarDadosERenderizar) porque as tabelas por mês
     // têm de acompanhar o filtro do topo, que chama só o renderDashboard.
     renderRendasTable(selectedMonthIndex);
+    renderBotaoDatas();
     renderDividasTable(selectedMonthIndex);
     renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTotals, selectedMonthIndex);
 

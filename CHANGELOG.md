@@ -5,6 +5,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.17.0] — Agosto 2026
+
+### 🆕 Adicionado
+- **Dia da compra nos lançamentos de cartão.** O formulário ganhou um campo **Dia** (opcional), ao lado do Mês, e o modal de edição também. **A data escolhida fica guardada até você mudar** — lançar cinco compras do mesmo dia agora custa digitar o dia uma vez só. Há um atalho **hoje** para preencher com a data de hoje. O campo nasce **vazio de propósito**: como dá para lançar em mês passado (v4.14.0), preencher "hoje" sozinho gravaria data errada em silêncio. Quem não lembra o dia deixa em branco, e nada se perde — o dia não muda valor, parcela nem mês.
+- **Preencher datas em massa.** As compras lançadas antes desta versão não têm dia, e **não há de onde adivinhar**: o registro do histórico guarda a hora em que você *digitou*, não a da compra. Então, quando houver compras sem data no mês em tela, aparece o botão **📅 Preencher datas** no Detalhamento de Faturas, com a contagem. Ele abre uma lista só daquelas compras — cada uma com um campinho de dia, o nome, o cartão e o valor para você reconhecer — e um **Preencher tudo** para quando o lote foi todo no mesmo dia. Salva de uma vez. O botão **some sozinho** quando o mês fica completo, e o que você não preencher continua lá para depois, sem travar nada.
+
+> Este é o passo que prepara o **gráfico de compras por dia**, que vem a seguir: sem data nos lançamentos, o gráfico mostraria tudo amontoado num dia só e mentiria sobre os seus hábitos.
+
+---
+
 ## [4.16.0] — Agosto 2026
 
 ### 🔧 Melhorado
