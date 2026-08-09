@@ -1118,7 +1118,7 @@ on conflict (id) do nothing;</div>
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead id="rendasHead"></thead>
                 <tbody class="divide-y divide-gray-100" id="rendasBody"></tbody>
-                <tfoot><tr class="bg-emerald-50 font-bold text-emerald-800"><td class="px-2 py-3">TOTAL RENDA</td><td class="px-2 py-3 text-right" id="rendasTotal" colspan="2">R$ 0,00</td></tr></tfoot>
+                <tfoot><tr class="bg-emerald-50 font-bold text-emerald-800"><td class="px-2 py-3" id="rendasTotalLabel">TOTAL RENDA</td><td class="px-2 py-3 text-right" id="rendasTotal" colspan="2">R$ 0,00</td></tr></tfoot>
             </table>
             </div>
         </div>
@@ -1128,7 +1128,7 @@ on conflict (id) do nothing;</div>
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead id="fixasHead"></thead>
                 <tbody class="divide-y divide-gray-100" id="fixedExpensesBody"></tbody>
-                <tfoot><tr class="bg-orange-50 font-bold text-orange-800"><td class="px-2 py-3">TOTAL FIXO</td><td class="px-2 py-3 text-right" id="fixedExpensesTotal" colspan="2">R$ 0,00</td></tr></tfoot>
+                <tfoot><tr class="bg-orange-50 font-bold text-orange-800"><td class="px-2 py-3" id="fixasTotalLabel">TOTAL FIXO</td><td class="px-2 py-3 text-right" id="fixedExpensesTotal" colspan="2">R$ 0,00</td></tr></tfoot>
             </table>
             </div>
         </div>
@@ -1505,7 +1505,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'Margem'; // © 2026 MGC Dev
-const APP_VERSION    = '4.18.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.18.1'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -3040,6 +3040,7 @@ let pieChartInstance = null;
 let TOTAL_FIXED      = 0;
 let RENDA_MENSAL     = 0;
 // Séries mensais compartilhadas (dashboard, fluxo de caixa, simulador) — v4.10.0
+let RENDA_TOTAL_MES  = 0;   // renda do mês em foco = recorrente vigente + extra do mês
 let _fixasArr        = [];  // despesa fixa vigente por mês (índice = mês)
 let _rendaArr        = [];  // renda recorrente vigente por mês (índice = mês)
 let _rendaExtraArr   = [];  // renda extra por mês (índice = mês)
@@ -3129,9 +3130,9 @@ function processarDadosERenderizar() {
     });
 
     _recomputeSeries();
-    // os dois escalares passam a ser o valor DO MÊS EM FOCO, lidos das séries
-    TOTAL_FIXED  = _fixasArr[_mesFocoIdx()] || 0;
-    RENDA_MENSAL = _rendaArr[_mesFocoIdx()] || 0;
+    // TOTAL_FIXED/RENDA_MENSAL NÃO são definidos aqui: eles dependem do mês em foco, e
+    // trocar o mês chama só renderDashboard(). Definidos lá, junto dos demais valores
+    // por-mês, para não existir caminho que atualize uns e deixe estes parados.
 
     // Rebuild filterStore with active categories
     const activeCats = [...new Set(processedData.map(i => i.category))];
@@ -3144,8 +3145,6 @@ function processarDadosERenderizar() {
     });
     if ([...fs.options].some(o => o.value === prevStore)) fs.value = prevStore;
 
-    animateKpi('valorRenda', RENDA_MENSAL);
-    animateKpi('valorFixas', TOTAL_FIXED);
 
     renderMetasSection();
     renderDashboard();
@@ -3157,6 +3156,12 @@ function renderDashboard() {
     const selectedMonth = document.getElementById('filterMonth').value;
     const selectedMonthIndex     = selectedMonth === 'Todos' ? -1 : monthNames.indexOf(selectedMonth);
     const actualMonthIndexForCalc = selectedMonthIndex === -1 ? HISTORY_COUNT : selectedMonthIndex;
+
+    // Renda recorrente e despesa fixa DO MÊS EM FOCO. Ficam aqui, e não em
+    // processarDadosERenderizar, porque trocar o mês chama só esta função — lá elas
+    // congelavam no mês do último recálculo e contaminavam os cards e os rodapés.
+    TOTAL_FIXED  = _fixasArr[actualMonthIndexForCalc] || 0;
+    RENDA_MENSAL = _rendaArr[actualMonthIndexForCalc] || 0;
 
     const filteredData = processedData.filter(item => {
         const matchCard  = selectedCard  === 'Todos' || item.card === selectedCard;
@@ -3214,7 +3219,13 @@ function renderDashboard() {
     // Renda extra e déficit trazido do mês anterior (v4.10.0)
     const rendaExtraMes = _rendaExtraArr[actualMonthIndexForCalc] || 0;
     const carriedMes    = _carriedInArr[actualMonthIndexForCalc] || 0;
+    // Renda DO MÊS = recorrente vigente + extra daquele mês. É esta que o card mostra e
+    // que o rodapé do painel soma. Antes o card exibia só a recorrente enquanto o Saldo
+    // já usava as duas — e aí Renda − Fixas − Faturas − Dívidas não fechava com o Saldo.
     const rendaComExtra = RENDA_MENSAL + rendaExtraMes;
+    RENDA_TOTAL_MES = rendaComExtra;
+    animateKpi('valorRenda', rendaComExtra);
+    animateKpi('valorFixas', TOTAL_FIXED);
 
     // Comprometimento
     const totalSaidasMes = TOTAL_FIXED + valorFaturaRef + valorDividaRef;
@@ -3647,9 +3658,13 @@ function renderRendasTable(selectedMonthIndex) {
     }
     if (!rendasHTML) rendasHTML = `<tr><td colspan="3" class="px-2 py-3 text-center text-gray-400 text-xs italic">Nenhuma renda cadastrada</td></tr>`;
     document.getElementById('rendasBody').innerHTML = rendasHTML;
-    // TOTAL = renda recorrente (o KPI "Renda Mensal"); a extra do mês entra à parte,
-    // como já entra no saldo/gráficos por _rendaExtraArr.
-    document.getElementById('rendasTotal').textContent = formatCurrency(RENDA_MENSAL);
+    // TOTAL = renda do MÊS EM FOCO (recorrente vigente + extra), igual ao card "Renda
+    // Mensal". Em "Todos os Meses" a lista mostra tudo, mas somar meses diferentes daria
+    // um número sem significado — então o total segue sendo o do mês em foco, e o rótulo
+    // diz qual é, para não restar dúvida sobre o que está sendo somado.
+    document.getElementById('rendasTotal').textContent = formatCurrency(RENDA_TOTAL_MES);
+    const rotR = document.getElementById('rendasTotalLabel');
+    if (rotR) rotR.textContent = `TOTAL RENDA (${monthNames[_mesFocoIdx()]})`;
 }
 
 // Despesas Fixas — só as VIGENTES no mês em tela (índice -1 = "Todos" lista tudo,
@@ -3680,6 +3695,8 @@ function renderFixasTable(selectedMonthIndex) {
     if (!fixedHTML) fixedHTML = `<tr><td colspan="3" class="px-2 py-3 text-center text-gray-400 text-xs italic">Nenhuma despesa fixa neste mês</td></tr>`;
     document.getElementById('fixedExpensesBody').innerHTML = fixedHTML;
     document.getElementById('fixedExpensesTotal').textContent = formatCurrency(TOTAL_FIXED);
+    const rotF = document.getElementById('fixasTotalLabel');
+    if (rotF) rotF.textContent = `TOTAL FIXO (${monthNames[_mesFocoIdx()]})`;
 }
 
 function renderDividasTable(selectedMonthIndex) {

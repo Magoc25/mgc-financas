@@ -5,6 +5,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.18.1] — Agosto 2026
+
+### 🐛 Correções
+- **Os cards paravam no mês anterior ao trocar o mês.** Depois da vigência (v4.18.0), **Renda Mensal**, **Despesas Fixas** e **Saldo Mensal** passaram a depender do mês escolhido — mas continuavam sendo calculados só quando algo era lançado ou editado. Trocar o mês no topo não os atualizava, e eles ficavam exibindo os números do mês visto por último. Era isso que fazia o Saldo de agosto parecer usar a renda do mês anterior.
+- **"RENDA TOTAL" não somava tudo que o painel listava.** O painel **Fontes de Renda** mostra as recorrentes do mês **e** as rendas extras daquele mês, mas o total somava só as recorrentes. Agora soma as duas — o rodapé fecha com a lista acima dele.
+- **O card Renda não fechava com o card Saldo.** O Saldo já contava a renda extra do mês, enquanto o card Renda a ignorava; assim, `Renda − Fixas − Faturas − Dívidas` não dava o Saldo mostrado ao lado. Agora **Renda Mensal** é a renda daquele mês inteira, e a conta fecha na tela.
+
+### 🔧 Melhorado
+- Os rodapés dos painéis passaram a dizer **de que mês** é o total (ex.: *TOTAL RENDA (Ago/26)*), útil principalmente em "Todos os Meses", onde a lista mostra vários meses de uma vez.
+
+---
+
 ## [4.18.0] — Agosto 2026
 
 ### 🐛 Correções
