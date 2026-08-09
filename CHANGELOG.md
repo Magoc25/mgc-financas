@@ -5,6 +5,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.19.0] — Agosto 2026
+
+### 🆕 Adicionado
+- **Gráfico de compras nos cartões ao longo do mês.** Na aba **Gráficos**, uma linha por cartão mostrando as compras **acumuladas dia a dia**. Um **degrau** na linha é um dia de gasto concentrado — é assim que dá para descobrir se você tem dias específicos em que gasta mais (depois do pagamento, fim de semana, começo do mês). O eixo vai do dia 1 ao último dia real do mês.
+  - **Compra parcelada conta pelo valor cheio, no dia em que foi feita.** Uma TV de R$ 1.200 em 12× aparece como R$ 1.200 no dia da compra, não como doze compras de R$ 100 espalhadas — porque foi uma compra só.
+  - **Só entram as compras que têm data.** Acima do gráfico, um aviso diz **quantas compras daquele mês estão sem data** e não estão sendo contadas, com um atalho para preencher. Quando o mês fica completo, o aviso vira uma confirmação de que está tudo lá.
+
+---
+
 ## [4.18.1] — Agosto 2026
 
 ### 🐛 Correções
