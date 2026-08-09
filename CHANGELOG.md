@@ -5,6 +5,22 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.18.0] — Agosto 2026
+
+### 🐛 Correções
+- **Mexer na renda ou numa despesa fixa não reescreve mais o passado.** Até aqui, renda recorrente e despesa fixa não tinham data nenhuma: o valor era aplicado a **todos** os meses, para trás e para frente. Então, se o seu salário aumentou em agosto, o app passava a mostrar o salário novo também em janeiro — e todo o balanço dos meses anteriores ficava falso. O mesmo valia para incluir ou cortar uma despesa fixa. **Agora cada renda e cada despesa fixa tem uma vigência**, e alterar afeta o presente e o futuro, nunca o histórico.
+
+### 🔧 Melhorado
+- **Renda ou despesa fixa nova vale a partir do mês em tela.** Lançou uma nova em agosto? Ela conta de agosto em diante e **não aparece** nos meses anteriores.
+- **Cortar uma conta preserva o histórico.** O ✕ em Fontes de Renda e Despesas Fixas passou a ser **Encerrar**: a conta de celular cortada em agosto some de agosto em diante, e julho e os meses anteriores continuam com ela — porque você realmente pagou. Para o caso de lançamento por engano, o mesmo aviso traz **Apagar de vez**, que remove de todo o histórico.
+- **Ao editar o valor, você escolhe o alcance.** O modal de edição pergunta se a mudança vale **a partir do mês em tela** (o padrão — encerra o valor antigo e abre o novo, preservando o histórico) ou **em todo o histórico** (para corrigir um valor digitado errado).
+- **As tabelas acompanham o mês do filtro.** Fontes de Renda e Despesas Fixas passam a listar o que estava vigente no mês escolhido, com o período ao lado do nome. Em **"Todos os Meses"** aparecem todas, inclusive as encerradas, para você poder editar ou reabrir.
+- O backup CSV ganhou as colunas **Início** e **Fim**.
+
+> **Seus lançamentos atuais não mudam.** Renda e despesa fixa que já existiam continuam valendo em todos os meses, exatamente como hoje — a vigência só começa a valer para o que você criar ou alterar daqui em diante.
+
+---
+
 ## [4.17.0] — Agosto 2026
 
 ### 🆕 Adicionado

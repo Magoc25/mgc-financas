@@ -432,8 +432,9 @@
                 <p id="confirmText" class="text-sm text-gray-500 mt-1">Tem certeza?</p>
             </div>
         </div>
-        <div class="flex justify-end gap-3">
+        <div class="flex justify-end gap-3 flex-wrap">
             <button id="confirmCancelBtn" class="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition">Cancelar</button>
+            <button id="confirmAltBtn" style="display:none" class="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-700 font-medium transition"></button>
             <button id="confirmOkBtn" class="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium transition">Confirmar</button>
         </div>
     </div>
@@ -473,6 +474,19 @@
             <div id="editMesRow" style="display:none">
                 <label class="block text-xs font-medium text-gray-500 mb-1">Mês de Início</label>
                 <select id="editMes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none"></select>
+            </div>
+            <div id="editVigenciaRow" style="display:none">
+                <label class="block text-xs font-medium text-gray-500 mb-1">Esta mudança vale:</label>
+                <label class="flex items-start gap-2 p-2 rounded-lg border border-gray-200 cursor-pointer mb-1">
+                    <input type="radio" name="editVigencia" id="editVigDaqui" value="daqui" checked class="mt-0.5">
+                    <span class="text-sm">a partir de <strong id="editVigMes"></strong>
+                        <span class="block text-[11px] text-gray-400">o histórico anterior fica preservado</span></span>
+                </label>
+                <label class="flex items-start gap-2 p-2 rounded-lg border border-gray-200 cursor-pointer">
+                    <input type="radio" name="editVigencia" value="tudo" class="mt-0.5">
+                    <span class="text-sm">em todo o histórico
+                        <span class="block text-[11px] text-gray-400">para corrigir um valor digitado errado</span></span>
+                </label>
             </div>
             <div id="editDiaRow" style="display:none">
                 <label class="block text-xs font-medium text-gray-500 mb-1">Dia da compra <span class="text-gray-400 font-normal">(opcional)</span></label>
@@ -1491,7 +1505,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'Margem'; // © 2026 MGC Dev
-const APP_VERSION    = '4.17.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.18.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -2017,20 +2031,35 @@ function toast(msg, type = 'success') {
 // CONFIRM MODAL
 // ============================================================
 let _confirmCb = null;
-function showConfirm(msg, cb) {
+// opts (opcional): { ok, alt, onAlt } — botão do meio para a 2ª saída de uma mesma
+// decisão (ex.: "Encerrar" preserva histórico · "Apagar de vez" some com tudo).
+let _confirmAltCb = null;
+function showConfirm(msg, cb, opts) {
+    const o   = opts || {};
+    const alt = document.getElementById('confirmAltBtn');
     document.getElementById('confirmText').textContent = msg;
+    document.getElementById('confirmOkBtn').textContent = o.ok || 'Confirmar';
+    alt.style.display = o.alt ? '' : 'none';
+    alt.textContent   = o.alt || '';
+    _confirmAltCb = o.onAlt || null;
     document.getElementById('confirmModal').classList.remove('hidden');
     _confirmCb = cb;
 }
-document.getElementById('confirmOkBtn').onclick = () => {
+function _fecharConfirm() {
     document.getElementById('confirmModal').classList.add('hidden');
-    if (_confirmCb) _confirmCb(); _confirmCb = null;
+    _confirmCb = null; _confirmAltCb = null;
+}
+document.getElementById('confirmOkBtn').onclick = () => {
+    const cb = _confirmCb; _fecharConfirm();
+    if (cb) cb();
 };
-document.getElementById('confirmCancelBtn').onclick = () => {
-    document.getElementById('confirmModal').classList.add('hidden'); _confirmCb = null;
+document.getElementById('confirmAltBtn').onclick = () => {
+    const cb = _confirmAltCb; _fecharConfirm();
+    if (cb) cb();
 };
+document.getElementById('confirmCancelBtn').onclick = _fecharConfirm;
 document.getElementById('confirmModal').onclick = function(e) {
-    if (e.target === this) { this.classList.add('hidden'); _confirmCb = null; }
+    if (e.target === this) _fecharConfirm();
 };
 
 // ============================================================
@@ -2056,6 +2085,14 @@ function editarItem(tipo, index) {
     document.getElementById('editMesRow').style.display       = showMes      ? '' : 'none';
     document.getElementById('editCategoriaRow').style.display = showCat      ? '' : 'none';
     document.getElementById('editDiaRow').style.display       = showCat      ? '' : 'none';   // dia = só fatura
+    // A escolha de vigência só faz sentido para os recorrentes (renda/fixa): são eles
+    // que valem em TODOS os meses e cuja alteração reescreveria o passado.
+    const showVig = tipo === 'fixa' || tipo === 'renda';
+    document.getElementById('editVigenciaRow').style.display = showVig ? '' : 'none';
+    if (showVig) {
+        document.getElementById('editVigMes').textContent = _mesPadraoForm();
+        document.getElementById('editVigDaqui').checked   = true;   // padrão preserva histórico
+    }
 
     if (showCat) document.getElementById('editDia').value = data.dia || '';
     if (showParcelas) { document.getElementById('editCurr').value = data.curr; document.getElementById('editTotal').value = data.total; }
@@ -2079,8 +2116,7 @@ document.getElementById('editSaveBtn').onclick = () => {
     if (!editOk) { toast('Preencha todos os campos corretamente.', 'error'); return; }
     editNomeEl.classList.remove('field-error'); editValorEl.classList.remove('field-error');
 
-    if (tipo === 'fixa')  appData.fixas[index]  = { ...appData.fixas[index],  name: nome, amount: valor };
-    else if (tipo === 'renda')  appData.rendas[index] = { ...appData.rendas[index], name: nome, amount: valor };
+    if (tipo === 'fixa' || tipo === 'renda') _editarRecorrente(tipo, index, nome, valor);
     else if (tipo === 'rendaExtra') appData.rendasExtras[index] = { ...appData.rendasExtras[index], name: nome, amount: valor, mes: document.getElementById('editMes').value };
     else if (tipo === 'divida') appData.dividas[index] = { ...appData.dividas[index], name: nome, amount: valor, mesInicio: document.getElementById('editMes').value };
     else if (tipo === 'fatura') {
@@ -2370,9 +2406,86 @@ async function inicializar() {
 // lançar em mês passado sem ter de escolher o mês duas vezes. Em "Todos os
 // Meses" não há mês definido → cai no mês atual. Os dois selects são montados
 // do mesmo monthNames, então todo mês do filtro existe como opção no formulário.
+// ── Vigência de renda/despesa fixa (v4.18.0) ─────────────────────────────────
+// Antes, `fixas` e `rendas` eram {name, amount} SEM tempo: o mesmo valor era
+// carimbado nos 36 meses, então incluir/tirar/alterar reescrevia o passado — o
+// salário de agosto virava o salário de janeiro e o balanço histórico ficava falso.
+// Agora cada item tem uma janela: `inicio` (1º mês que conta) e `fim` (último).
+//
+// Comparação por mês ABSOLUTO, não por índice em monthNames: a janela de 36 meses
+// desliza com o tempo, e um `inicio` que já saiu pela esquerda daria indexOf === -1,
+// que é indistinguível de "mês inválido". Com número absoluto, "começou antes da
+// janela" continua contando em toda ela, que é o correto.
+const _MESES_AB = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function _absMonth(str) {
+    const [m, y] = String(str || '').split('/');
+    const i = _MESES_AB.indexOf(m);
+    return i < 0 ? NaN : (2000 + parseInt(y, 10)) * 12 + i;
+}
+// Item SEM `inicio` conta em todos os meses — é o legado, e reinterpretá-lo como
+// "começa hoje" mudaria o histórico de quem já usa o app, na atualização, sozinho.
+function _vigenteNoMes(item, i) {
+    const m = _absMonth(monthNames[i]);
+    if (item.inicio) { const a = _absMonth(item.inicio); if (!isNaN(a) && m < a) return false; }
+    if (item.fim)    { const b = _absMonth(item.fim);    if (!isNaN(b) && m > b) return false; }
+    return true;
+}
+// Mês anterior a um dado mês ('Ago/26' → 'Jul/26'). Encerrar em agosto = fim julho.
+function _mesAnterior(mes) {
+    const a = _absMonth(mes);
+    if (isNaN(a)) return mes;
+    const p = a - 1;
+    return _MESES_AB[p % 12] + '/' + String(Math.floor(p / 12) - 2000).padStart(2, '0');
+}
+// Editar renda/despesa fixa: "a partir do mês" ENCERRA o item vigente no mês anterior
+// e abre um novo — assim o passado guarda o valor que realmente valia. "Em todo o
+// histórico" reescreve no lugar, que é o certo para corrigir um valor digitado errado.
+// Sem valor alterado (só o nome), não há por que dividir: renomeia nos dois casos.
+function _editarRecorrente(tipo, index, nome, valor) {
+    const col  = tipo === 'fixa' ? appData.fixas : appData.rendas;
+    const atual = col[index];
+    if (!atual) return;
+    const el     = document.getElementById('editVigDaqui');
+    const daqui  = !!(el && el.checked);
+    const mudouValor = Number(atual.amount) !== Number(valor);
+    const mes    = _mesPadraoForm();
+
+    if (!daqui || !mudouValor) {                       // corrigir no lugar
+        col[index] = { ...atual, name: nome, amount: valor };
+        return;
+    }
+    // Já começa neste mês? Não há passado a preservar — só atualiza.
+    if (atual.inicio && _absMonth(atual.inicio) >= _absMonth(mes)) {
+        col[index] = { ...atual, name: nome, amount: valor };
+        return;
+    }
+    // encerra o vigente no mês anterior e abre o novo a partir deste
+    const anterior = _mesAnterior(mes);
+    col[index] = { ...atual, fim: anterior };
+    const novo = { ...atual, name: nome, amount: valor, inicio: mes };
+    delete novo.fim;
+    delete novo.id;          // item novo ganha identidade própria no sync (guard de id repetido)
+    delete novo.updatedAt;
+    col.push(novo);
+}
+
+function _rotuloVigencia(item) {
+    if (!item.inicio && !item.fim) return '';
+    if (item.inicio && item.fim)   return `${item.inicio} → ${item.fim}`;
+    if (item.fim)                  return `até ${item.fim}`;
+    return `desde ${item.inicio}`;
+}
+
 function _mesPadraoForm() {
     const f = document.getElementById('filterMonth');
     return (f && f.value && f.value !== 'Todos') ? f.value : monthNames[HISTORY_COUNT];
+}
+// Índice do mês em foco — "Todos os Meses" cai no mês atual. Fonte única para quem
+// precisa de UM mês (KPIs, totais de rodapé) a partir das séries por mês (r66b).
+function _mesFocoIdx() {
+    const f = document.getElementById('filterMonth');
+    const i = (f && f.value && f.value !== 'Todos') ? monthNames.indexOf(f.value) : -1;
+    return i >= 0 ? i : HISTORY_COUNT;
 }
 
 // Fonte única do mês inicial do formulário — chamada do boot, do filtro, do
@@ -2497,14 +2610,14 @@ function exportarCSV() {
     const escape = v => `"${String(v).replace(/"/g,'""')}"`;
     let csv = '';
 
-    csv += 'RENDAS\nNome,Valor\n';
-    appData.rendas.forEach(r => { csv += `${escape(r.name)},${r.amount}\n`; });
+    csv += 'RENDAS\nNome,Valor,Início,Fim\n';
+    appData.rendas.forEach(r => { csv += `${escape(r.name)},${r.amount},${r.inicio || ''},${r.fim || ''}\n`; });
 
     csv += '\nRENDAS EXTRAS (por mês)\nNome,Valor,Mês\n';
     appData.rendasExtras.forEach(r => { csv += `${escape(r.name)},${r.amount},${r.mes || ''}\n`; });
 
-    csv += '\nDESPESAS FIXAS\nNome,Valor\n';
-    appData.fixas.forEach(f => { csv += `${escape(f.name)},${f.amount}\n`; });
+    csv += '\nDESPESAS FIXAS\nNome,Valor,Início,Fim\n';
+    appData.fixas.forEach(f => { csv += `${escape(f.name)},${f.amount},${f.inicio || ''},${f.fim || ''}\n`; });
 
     csv += '\nDÍVIDAS EXTRAS\nNome,Valor,Mês Início\n';
     appData.dividas.forEach(d => { csv += `${escape(d.name)},${d.amount},${d.mesInicio || ''}\n`; });
@@ -2573,7 +2686,37 @@ function importarDados(event) {
 let _undoBuffer     = null;
 let _lastUndoToast  = null;
 
+// Renda/despesa fixa não se "remove": ela ENCERRA. Cortar a conta de celular em agosto
+// não significa que ela nunca existiu — julho e antes têm de continuar com ela. Apagar
+// de vez continua disponível para o caso de lançamento por engano.
 function removerItem(tipo, index) {
+    if (tipo === 'fixa' || tipo === 'renda') {
+        const col  = tipo === 'fixa' ? appData.fixas : appData.rendas;
+        const item = col[index];
+        if (!item) return;
+        const mes  = _mesPadraoForm();
+        const ant  = _mesAnterior(mes);
+        const jaComeca = item.inicio && _absMonth(item.inicio) >= _absMonth(mes);
+        // se começa neste mês ou depois, encerrar deixaria uma janela vazia — some de vez
+        if (jaComeca) { _apagarRecorrente(tipo, index); return; }
+        showConfirm(
+            `Encerrar "${item.name}"? Deixa de contar a partir de ${mes} — ${ant} e os meses anteriores ficam intactos.`,
+            () => {
+                col[index] = { ...item, fim: ant };
+                logHistorico('editar', tipo, `${item.name} encerrada em ${ant}`, item.amount);
+                salvarDados(); processarDadosERenderizar();
+                toast(`"${item.name}" não conta mais a partir de ${mes}.`, 'warning');
+            },
+            { ok: 'Encerrar', alt: 'Apagar de vez', onAlt: () => _apagarRecorrente(tipo, index) }
+        );
+        return;
+    }
+    _removerItemDireto(tipo, index);
+}
+// apagar de vez = o lançamento foi engano; aí some do histórico inteiro (com desfazer)
+function _apagarRecorrente(tipo, index) { _removerItemDireto(tipo, index); }
+
+function _removerItemDireto(tipo, index) {
     let removed;
     if (tipo === 'fixa')        removed = appData.fixas.splice(index, 1)[0];
     else if (tipo === 'divida') removed = appData.dividas.splice(index, 1)[0];
@@ -2670,9 +2813,10 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
     const isCard = getCartoes().includes(tipo);
 
     if (tipo === 'Fixa') {
-        appData.fixas.push({ name: nome, amount: valor });
+        // vale a partir do mês em foco — despesa nova não retroage (v4.18.0)
+        appData.fixas.push({ name: nome, amount: valor, inicio: _mesPadraoForm() });
     } else if (tipo === 'Renda') {
-        appData.rendas.push({ name: nome, amount: valor });
+        appData.rendas.push({ name: nome, amount: valor, inicio: _mesPadraoForm() });
     } else if (tipo === 'RendaExtra') {
         appData.rendasExtras.push({ name: nome, amount: valor, mes });
     } else if (tipo === 'Divida') {
@@ -2896,6 +3040,8 @@ let pieChartInstance = null;
 let TOTAL_FIXED      = 0;
 let RENDA_MENSAL     = 0;
 // Séries mensais compartilhadas (dashboard, fluxo de caixa, simulador) — v4.10.0
+let _fixasArr        = [];  // despesa fixa vigente por mês (índice = mês)
+let _rendaArr        = [];  // renda recorrente vigente por mês (índice = mês)
 let _rendaExtraArr   = [];  // renda extra por mês (índice = mês)
 let _saldoBaseArr    = [];  // saldo do mês sem carry-forward (renda+extra − fixas − faturas − dívidas)
 let _carriedInArr    = [];  // déficit trazido do mês anterior (quando o mês está marcado)
@@ -2904,6 +3050,12 @@ const _prevVals      = {};
 
 // Recalcula as séries mensais a partir de processedData + appData (chamar após montar processedData)
 function _recomputeSeries() {
+    // Séries POR MÊS de renda recorrente e despesa fixa, respeitando a vigência de
+    // cada item. Substituem os dois escalares que eram carimbados em todo mês.
+    _fixasArr = monthNames.map((_, i) =>
+        (appData.fixas  || []).reduce((s, f) => s + (_vigenteNoMes(f, i) ? f.amount : 0), 0));
+    _rendaArr = monthNames.map((_, i) =>
+        (appData.rendas || []).reduce((s, r) => s + (_vigenteNoMes(r, i) ? r.amount : 0), 0));
     _rendaExtraArr = new Array(visibleMonths).fill(0);
     (appData.rendasExtras || []).forEach(r => {
         const i = monthNames.indexOf(r.mes);
@@ -2917,7 +3069,7 @@ function _recomputeSeries() {
         if (i >= 0 && i < visibleMonths) dividasAll[i] += d.amount;
     });
     _saldoBaseArr = monthNames.map((_, i) =>
-        (RENDA_MENSAL + _rendaExtraArr[i]) - (TOTAL_FIXED + faturasAll[i] + dividasAll[i]));
+        (_rendaArr[i] + _rendaExtraArr[i]) - (_fixasArr[i] + faturasAll[i] + dividasAll[i]));
     // Carry-forward: só o mês MARCADO puxa o déficit do anterior (sem cascata automática).
     _carriedInArr = new Array(visibleMonths).fill(0);
     _saldoAdjArr  = new Array(visibleMonths).fill(0);
@@ -2944,15 +3096,10 @@ function animateKpi(id, newVal) {
 
 function processarDadosERenderizar() {
     _fmtCtx = 'contas';
-    TOTAL_FIXED  = appData.fixas.reduce((s, c) => s + c.amount, 0);
-    RENDA_MENSAL = appData.rendas.reduce((s, c) => s + c.amount, 0);
-
-    // Converte "Mai/26" → número absoluto de meses para comparação correta entre meses passados
-    function _absMonth(str) {
-        const ab = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-        const [m, y] = str.split('/');
-        return (2000 + parseInt(y)) * 12 + ab.indexOf(m);
-    }
+    // TOTAL_FIXED/RENDA_MENSAL agora são o valor DO MÊS EM FOCO (definidos após
+    // _recomputeSeries, que monta as séries por mês) — antes eram um número só,
+    // aplicado a todos os meses, e era daí que vinha a reescrita do histórico.
+    // `_absMonth` vive no topo do arquivo (fonte única, usada também pela vigência)
     // _nowAbs sempre usa a data real, independente de monthNames[0]
     const _nowReal = new Date();
     const _nowAbs  = _nowReal.getFullYear() * 12 + _nowReal.getMonth();
@@ -2982,6 +3129,9 @@ function processarDadosERenderizar() {
     });
 
     _recomputeSeries();
+    // os dois escalares passam a ser o valor DO MÊS EM FOCO, lidos das séries
+    TOTAL_FIXED  = _fixasArr[_mesFocoIdx()] || 0;
+    RENDA_MENSAL = _rendaArr[_mesFocoIdx()] || 0;
 
     // Rebuild filterStore with active categories
     const activeCats = [...new Set(processedData.map(i => i.category))];
@@ -2996,28 +3146,6 @@ function processarDadosERenderizar() {
 
     animateKpi('valorRenda', RENDA_MENSAL);
     animateKpi('valorFixas', TOTAL_FIXED);
-
-    const thStyle = 'px-2 py-1.5 text-left text-xs font-semibold text-gray-500 sort-th border-b border-gray-100';
-
-    // Fixas table
-    document.getElementById('fixasHead').innerHTML = `<tr>
-        <th class="${thStyle}" onclick="sortarTabela('fixas','name')">Nome ${getSortIcon('fixas','name')}</th>
-        <th class="${thStyle} text-right" onclick="sortarTabela('fixas','amount')">Valor ${getSortIcon('fixas','amount')}</th>
-        <th class="px-2 py-1.5 w-16"></th></tr>`;
-    let fixedHTML = '';
-    aplicarSort(appData.fixas.map((item, i) => ({...item, _i: i})), 'fixas').forEach(item => {
-        fixedHTML += `<tr class="hover:bg-gray-50 text-gray-700">
-            <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)}</td>
-            <td class="px-2 py-2 whitespace-nowrap text-right font-medium">${formatCurrency(item.amount)}</td>
-            <td class="px-1 py-2 text-center w-16">
-                <button onclick="editarItem('fixa',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
-                <button onclick="duplicarItem('fixa',${item._i})" class="action-btn text-green-400 hover:text-green-700" title="Duplicar">⧉</button>
-                <button onclick="removerItem('fixa',${item._i})" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
-            </td></tr>`;
-    });
-    if (!fixedHTML) fixedHTML = `<tr><td colspan="3" class="px-2 py-3 text-center text-gray-400 text-xs italic">Nenhuma despesa fixa</td></tr>`;
-    document.getElementById('fixedExpensesBody').innerHTML = fixedHTML;
-    document.getElementById('fixedExpensesTotal').textContent = formatCurrency(TOTAL_FIXED);
 
     renderMetasSection();
     renderDashboard();
@@ -3144,6 +3272,7 @@ function renderDashboard() {
     // Tables — daqui (e não de processarDadosERenderizar) porque as tabelas por mês
     // têm de acompanhar o filtro do topo, que chama só o renderDashboard.
     renderRendasTable(selectedMonthIndex);
+    renderFixasTable(selectedMonthIndex);
     renderBotaoDatas();
     renderDividasTable(selectedMonthIndex);
     renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTotals, selectedMonthIndex);
@@ -3188,11 +3317,11 @@ function renderBarChart(monthlyFaturasTotals, monthlyDividasTotals) {
         data: {
             labels: monthNames,
             datasets: [
-                { type: 'line', label: 'Renda Mensal', data: monthNames.map((_, i) => RENDA_MENSAL + (_rendaExtraArr[i] || 0)), borderColor: 'rgba(16,185,129,1)', borderWidth: 2, borderDash: [5,5], pointRadius: 0, fill: false },
+                { type: 'line', label: 'Renda Mensal', data: monthNames.map((_, i) => (_rendaArr[i] || 0) + (_rendaExtraArr[i] || 0)), borderColor: 'rgba(16,185,129,1)', borderWidth: 2, borderDash: [5,5], pointRadius: 0, fill: false },
                 { type: 'bar',  label: 'Dívidas / Cheque', data: monthlyDividasTotals, backgroundColor: 'rgba(220,38,38,0.8)', borderColor: 'rgba(185,28,28,1)', borderWidth: 1 },
                 ...(_carriedInArr.some(v => v > 0) ? [{ type: 'bar', label: 'Déficit anterior', data: _carriedInArr.slice(), backgroundColor: 'rgba(126,34,206,0.8)', borderColor: 'rgba(107,33,168,1)', borderWidth: 1 }] : []),
                 { type: 'bar',  label: 'Faturas (Cartão)', data: monthlyFaturasTotals, backgroundColor: 'rgba(59,130,246,0.8)', borderColor: 'rgba(37,99,235,1)', borderWidth: 1 },
-                { type: 'bar',  label: 'Despesas Fixas', data: new Array(visibleMonths).fill(TOTAL_FIXED), backgroundColor: 'rgba(249,115,22,0.8)', borderColor: 'rgba(234,88,12,1)', borderWidth: 1, borderRadius: { topLeft: 4, topRight: 4 } }
+                { type: 'bar',  label: 'Despesas Fixas', data: monthNames.map((_, i) => _fixasArr[i] || 0), backgroundColor: 'rgba(249,115,22,0.8)', borderColor: 'rgba(234,88,12,1)', borderWidth: 1, borderRadius: { topLeft: 4, topRight: 4 } }
             ]
         },
         options: {
@@ -3318,7 +3447,7 @@ function renderCategoryTrendChart(monthlyDividasTotals) {
         if (!catData[item.category]) catData[item.category] = new Array(visibleMonths).fill(0);
         item.projections.forEach((val, i) => { catData[item.category][i] += val; });
     });
-    if (TOTAL_FIXED > 0) catData['Despesas Fixas'] = new Array(visibleMonths).fill(TOTAL_FIXED);
+    if (_fixasArr.some(v => v > 0)) catData['Despesas Fixas'] = monthNames.map((_, i) => _fixasArr[i] || 0);
 
     const activeCats = Object.keys(catData).filter(c => catData[c].some(v => v > 0));
     const txtColor   = chartTextColor();
@@ -3432,17 +3561,17 @@ function renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals) {
     const temExtra = _rendaExtraArr.some(v => v > 0);
     const temCarry = _carriedInArr.some(v => v > 0);
     const rows = [
-        { label: 'Renda',         data: monthNames.map((_, i) => RENDA_MENSAL + (_rendaExtraArr[i] || 0)), cls: 'text-emerald-700' },
+        { label: 'Renda',         data: monthNames.map((_, i) => (_rendaArr[i] || 0) + (_rendaExtraArr[i] || 0)), cls: 'text-emerald-700' },
     ];
     if (temExtra) rows.push({ label: '↳ Renda Extra', data: _rendaExtraArr.slice(), cls: 'text-teal-600' });
     rows.push(
-        { label: 'Desp. Fixas',   data: monthNames.map(() => TOTAL_FIXED),  cls: 'text-orange-600' },
+        { label: 'Desp. Fixas',   data: monthNames.map((_, i) => _fixasArr[i] || 0),  cls: 'text-orange-600' },
         { label: 'Faturas',       data: monthlyFaturasTotals,               cls: 'text-blue-600' },
         { label: 'Dívidas',       data: monthlyDividasTotals,               cls: 'text-red-600' }
     );
     if (temCarry) rows.push({ label: '↪ Déficit anterior', data: _carriedInArr.slice(), cls: 'text-red-500' });
     rows.push(
-        { label: 'Saldo', data: monthNames.map((_, i) => (RENDA_MENSAL + (_rendaExtraArr[i] || 0)) - TOTAL_FIXED - monthlyFaturasTotals[i] - monthlyDividasTotals[i] - (_carriedInArr[i] || 0)), cls: '' }
+        { label: 'Saldo', data: monthNames.map((_, i) => ((_rendaArr[i] || 0) + (_rendaExtraArr[i] || 0)) - (_fixasArr[i] || 0) - monthlyFaturasTotals[i] - monthlyDividasTotals[i] - (_carriedInArr[i] || 0)), cls: '' }
     );
 
     body.innerHTML = rows.map((row, ri) => {
@@ -3485,9 +3614,13 @@ function renderRendasTable(selectedMonthIndex) {
         <th class="${thStyle} text-right" onclick="sortarTabela('rendas','amount')">Valor ${getSortIcon('rendas','amount')}</th>
         <th class="px-2 py-1.5 w-16"></th></tr>`;
     let rendasHTML = '';
-    aplicarSort(appData.rendas.map((item, i) => ({...item, _i: i})), 'rendas').forEach(item => {
-        rendasHTML += `<tr class="hover:bg-gray-50 text-gray-700">
-            <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)}</td>
+    const _idxR = selectedMonthIndex === -1 ? null : selectedMonthIndex;
+    const _recorrentes = appData.rendas.map((item, i) => ({ ...item, _i: i }))
+        .filter(item => _idxR === null || _vigenteNoMes(item, _idxR));
+    aplicarSort(_recorrentes, 'rendas').forEach(item => {
+        const vig = _rotuloVigencia(item);
+        rendasHTML += `<tr class="hover:bg-gray-50 text-gray-700 ${_idxR === null && item.fim ? 'opacity-60' : ''}">
+            <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)}${vig ? ` <span class="text-[10px] text-gray-400">(${esc(vig)})</span>` : ''}</td>
             <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-emerald-600">${formatCurrency(item.amount)}</td>
             <td class="px-1 py-2 text-center w-16">
                 <button onclick="editarItem('renda',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
@@ -3517,6 +3650,36 @@ function renderRendasTable(selectedMonthIndex) {
     // TOTAL = renda recorrente (o KPI "Renda Mensal"); a extra do mês entra à parte,
     // como já entra no saldo/gráficos por _rendaExtraArr.
     document.getElementById('rendasTotal').textContent = formatCurrency(RENDA_MENSAL);
+}
+
+// Despesas Fixas — só as VIGENTES no mês em tela (índice -1 = "Todos" lista tudo,
+// para continuar dando para editar/reabrir as encerradas). Saiu de
+// processarDadosERenderizar para cá porque é o renderDashboard que o filtro chama.
+function renderFixasTable(selectedMonthIndex) {
+    const thStyle = 'px-2 py-1.5 text-left text-xs font-semibold text-gray-500 sort-th border-b border-gray-100';
+    document.getElementById('fixasHead').innerHTML = `<tr>
+        <th class="${thStyle}" onclick="sortarTabela('fixas','name')">Nome ${getSortIcon('fixas','name')}</th>
+        <th class="${thStyle} text-right" onclick="sortarTabela('fixas','amount')">Valor ${getSortIcon('fixas','amount')}</th>
+        <th class="px-2 py-1.5 w-16"></th></tr>`;
+    const idx   = selectedMonthIndex === -1 ? null : selectedMonthIndex;
+    const lista = appData.fixas.map((item, i) => ({ ...item, _i: i }))
+        .filter(item => idx === null || _vigenteNoMes(item, idx));
+    let fixedHTML = '';
+    aplicarSort(lista, 'fixas').forEach(item => {
+        const vig = _rotuloVigencia(item);
+        const encerrada = idx === null && item.fim;
+        fixedHTML += `<tr class="hover:bg-gray-50 text-gray-700 ${encerrada ? 'opacity-60' : ''}">
+            <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)}${vig ? ` <span class="text-[10px] text-gray-400">(${esc(vig)})</span>` : ''}</td>
+            <td class="px-2 py-2 whitespace-nowrap text-right font-medium">${formatCurrency(item.amount)}</td>
+            <td class="px-1 py-2 text-center w-16">
+                <button onclick="editarItem('fixa',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
+                <button onclick="duplicarItem('fixa',${item._i})" class="action-btn text-green-400 hover:text-green-700" title="Duplicar">⧉</button>
+                <button onclick="removerItem('fixa',${item._i})" class="action-btn text-red-300 hover:text-red-600" title="Encerrar ou remover">✕</button>
+            </td></tr>`;
+    });
+    if (!fixedHTML) fixedHTML = `<tr><td colspan="3" class="px-2 py-3 text-center text-gray-400 text-xs italic">Nenhuma despesa fixa neste mês</td></tr>`;
+    document.getElementById('fixedExpensesBody').innerHTML = fixedHTML;
+    document.getElementById('fixedExpensesTotal').textContent = formatCurrency(TOTAL_FIXED);
 }
 
 function renderDividasTable(selectedMonthIndex) {
@@ -3618,7 +3781,7 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
     let megaRow = `<tr class="bg-gray-800 font-bold text-white"><td class="px-4 py-3 fat-s1">SAÍDA TOTAL (CARTÃO + FIXAS + EXTRAS${_lblDef})</td><td class="fat-s2"></td><td class="fat-s3"></td>`;
     monthlyFaturasTotals.forEach((val, i) => {
         const hl = i === selectedMonthIndex ? 'bg-gray-700' : '';
-        megaRow += `<td class="px-4 py-3 whitespace-nowrap text-right ${hl}">${formatCurrency(val + TOTAL_FIXED + monthlyDividasTotals[i] + (_carriedInArr[i] || 0))}</td>`;
+        megaRow += `<td class="px-4 py-3 whitespace-nowrap text-right ${hl}">${formatCurrency(val + (_fixasArr[i] || 0) + monthlyDividasTotals[i] + (_carriedInArr[i] || 0))}</td>`;
     });
     megaRow += `<td class="fat-sr"></td></tr>`;
     tfootHTML += megaRow;

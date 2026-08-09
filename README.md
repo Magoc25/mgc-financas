@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas Margem é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.17.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.18.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -76,6 +76,7 @@ Quando quiser sincronizar entre computadores ou acessar pelo celular, basta conf
 - **Filtro por mês** com navegação rápida
 - **Sugestões na descrição**: o app guarda o que você já digitou e completa sozinho — com uma aba para apagar as sugestões erradas ou repetidas
 - **Dia da compra** (opcional) nos lançamentos de cartão — a data escolhida fica guardada até você mudar, e há uma tela para preencher em massa as compras antigas que ficaram sem data
+- **Vigência em renda e despesa fixa** — alterar, incluir ou cortar vale a partir do mês escolhido; o histórico dos meses anteriores fica preservado
 - **Modo compacto** para visualização reduzida
 
 ### Dívidas e Parcelamentos
