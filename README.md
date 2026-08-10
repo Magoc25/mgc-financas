@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas Margem é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.20.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.21.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -97,7 +97,7 @@ Quando quiser sincronizar entre computadores ou acessar pelo celular, basta conf
 - Gráfico de **pizza** — distribuição de despesas por categoria
 - Gráfico de **barras** — comparativo mensal de receitas vs despesas
 - Gráfico de **linha** — evolução do saldo ao longo dos meses
-- **Compras nos Cartões** — três visões: acumulado (ritmo do mês), colunas por dia (quais dias pesaram) e colunas por mês (em que meses subiu ou caiu); a data de uma parcela vale para as seguintes
+- **Compras nos Cartões** — três visões: acumulado (ritmo do mês), colunas por dia (quais dias pesaram) e colunas por mês (em que meses subiu ou caiu); a data de uma parcela vale para as seguintes; **clique numa coluna** para ver as compras daquele dia ou mês, uma a uma
 - Modo claro e escuro nos gráficos
 
 ### 🎯 Planejamento e fluxo de caixa

@@ -5,6 +5,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.21.0] — Agosto 2026
+
+### 🆕 Adicionado
+- **Clique numa coluna do gráfico e veja as compras daquele ponto.** No gráfico **Compras nos Cartões**, passar o cursor sempre mostrou o *total* por cartão — mas não dizia **quais** compras formaram aquele valor. Agora, clicando na coluna abre uma janela com a lista: descrição, cartão, categoria, o número da parcela quando é parcelado, e o valor de cada uma, com o total no rodapé.
+  - Funciona nas três visões: em **Acumulado** e **Por dia**, traz as compras **daquele dia**; em **Por mês**, traz tudo que cai **naquele mês** (inclusive o que ainda está sem dia).
+  - O cursor vira uma mãozinha sobre as colunas clicáveis, e ponto sem compra simplesmente não abre nada.
+
+---
+
 ## [4.20.0] — Agosto 2026
 
 ### 🆕 Adicionado

@@ -557,6 +557,22 @@ on conflict (id) do nothing;</div>
 </div>
 
 <!-- MANAGER MODAL (Categorias & Cartões) -->
+<!-- Compras de um ponto do gráfico (dia ou mês) — v4.21.0 -->
+<div id="comprasPontoModal" class="modal-overlay hidden">
+    <div class="modal-box" style="width:min(92vw,560px); max-height:88vh; overflow-y:auto;">
+        <div class="flex justify-between items-center mb-1">
+            <h3 class="text-lg font-semibold text-gray-800" style="color:inherit" id="comprasPontoTitulo">Compras</h3>
+            <button onclick="document.getElementById('comprasPontoModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        </div>
+        <p class="text-xs text-gray-400 mb-3" id="comprasPontoSub"></p>
+        <div id="comprasPontoLista" class="divide-y divide-gray-100 mb-3"></div>
+        <div class="flex justify-between items-center pt-2 border-t border-gray-200">
+            <span class="text-sm font-semibold text-gray-600">Total</span>
+            <span class="text-base font-bold text-indigo-600" id="comprasPontoTotal">R$ 0,00</span>
+        </div>
+    </div>
+</div>
+
 <!-- Preencher datas em massa — as compras lançadas antes da v4.17.0 não têm dia -->
 <div id="datasModal" class="modal-overlay hidden">
     <div class="modal-box" style="width:min(92vw,620px); max-height:88vh; overflow-y:auto;">
@@ -1071,7 +1087,7 @@ on conflict (id) do nothing;</div>
             <button onclick="exportarGrafico('comprasDiaChart','compras-cartoes')" class="chart-export-btn" title="Salvar como PNG">💾</button>
         </div>
     </div>
-    <p class="text-xs text-gray-400 mb-2">Uma cor por cartão. <strong>Acumulado</strong> mostra o ritmo do mês (um degrau = dia de gasto concentrado); <strong>Por dia</strong> mostra a variação entre os dias; <strong>Por mês</strong> compara os meses entre si. A parcela entra no <strong>dia em que ela cai</strong> — lançar o dia de uma parcela vale para as seguintes.</p>
+    <p class="text-xs text-gray-400 mb-2">Uma cor por cartão. <strong>Acumulado</strong> mostra o ritmo do mês (um degrau = dia de gasto concentrado); <strong>Por dia</strong> mostra a variação entre os dias; <strong>Por mês</strong> compara os meses entre si. <strong>Clique numa coluna</strong> para ver as compras daquele ponto. A parcela entra no <strong>dia em que ela cai</strong> — lançar o dia de uma parcela vale para as seguintes.</p>
     <p id="comprasDiaAviso" class="text-xs mb-3"></p>
     <div class="relative h-72 w-full overflow-x-auto">
         <div style="min-width:640px; height:100%;">
@@ -1527,7 +1543,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'Margem'; // © 2026 MGC Dev
-const APP_VERSION    = '4.20.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.21.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -3487,6 +3503,48 @@ let comprasDiaChart    = null;
 // sabe em quais meses e por quanto (`projections`). Lançar "fone 3/10, dia 10" preenche
 // sozinho as parcelas 4..10 nos meses seguintes — uma digitação, dez meses. (Até a v4.19.0 o
 // campo era lido como data da COMPRA, com o valor cheio num mês só; mudou na v4.20.0.)
+// Clicar numa coluna abre as compras daquele ponto. O tooltip já dava o TOTAL por cartão;
+// o que faltava era o detalhe — qual compra formou aquele valor. A lógica fica separada do
+// Chart.js de propósito: `_comprasDoPonto` é função pura de dados e dá para testar sem clique.
+// Índice: nas visões por dia é (dia − 1); na visão por mês é o índice do mês.
+function _comprasDoPonto(idx) {
+    const porMes = _comprasModo === 'mes';
+    const i0     = porMes ? idx : _mesFocoIdx();
+    if (i0 < 0 || i0 >= visibleMonths) return null;
+    const itens = (processedData || []).filter(p => {
+        if ((p.projections[i0] || 0) <= 0) return false;
+        if (porMes) return true;                       // na visão mensal, tudo que cai no mês
+        return parseInt(p.dia, 10) === idx + 1;        // nas diárias, só o que cai naquele dia
+    }).map(p => ({
+        card: p.card, name: p.name, category: p.category,
+        curr: p.curr, total: p.total,
+        valor: p.projections[i0] || 0
+    })).sort((a, b) => b.valor - a.valor);
+    return {
+        titulo: porMes ? `Compras de ${monthNames[i0]}` : `Compras do dia ${idx + 1} — ${monthNames[i0]}`,
+        itens,
+        total: itens.reduce((s, x) => s + x.valor, 0)
+    };
+}
+function abrirComprasDoPonto(idx) {
+    const d = _comprasDoPonto(idx);
+    if (!d || !d.itens.length) return;                 // ponto vazio não abre modal à toa
+    document.getElementById('comprasPontoTitulo').textContent = d.titulo;
+    document.getElementById('comprasPontoSub').textContent =
+        `${d.itens.length} ${d.itens.length === 1 ? 'lançamento' : 'lançamentos'} · valor da parcela que cai neste ${_comprasModo === 'mes' ? 'mês' : 'dia'}`;
+    document.getElementById('comprasPontoLista').innerHTML = d.itens.map(x => `
+        <div class="flex items-center gap-3 py-2">
+            <span style="width:8px;height:8px;border-radius:50%;background:${getColor(x.card)};display:inline-block;flex-shrink:0"></span>
+            <div class="min-w-0 flex-1">
+                <div class="text-sm font-medium truncate">${esc(x.name)}</div>
+                <div class="text-[11px] text-gray-400 truncate">${esc(x.card)} · ${esc(x.category || '—')}${x.total > 1 ? ` · parcela ${x.curr}/${x.total}` : ''}</div>
+            </div>
+            <span class="text-sm font-medium flex-shrink-0">${formatCurrency(x.valor)}</span>
+        </div>`).join('');
+    document.getElementById('comprasPontoTotal').textContent = formatCurrency(d.total);
+    document.getElementById('comprasPontoModal').classList.remove('hidden');
+}
+
 let _comprasModo = 'acumulado';
 function setComprasModo(m) {
     _comprasModo = m;
@@ -3543,6 +3601,8 @@ function renderComprasDiaChart() {
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
+                onClick: (ev, els) => { if (els && els.length) abrirComprasDoPonto(els[0].index); },
+                onHover: (ev, els) => { ev.native.target.style.cursor = (els && els.length) ? 'pointer' : 'default'; },
                 plugins: {
                     legend: { labels: { color: txtColor, boxWidth: 12 } },
                     title: cartoesM.length ? { display: false } : { display: true, text: 'Sem parcelas de cartão no período', color: txtColor },
@@ -3600,6 +3660,8 @@ function renderComprasDiaChart() {
         options: {
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
+            onClick: (ev, els) => { if (els && els.length) abrirComprasDoPonto(els[0].index); },
+            onHover: (ev, els) => { ev.native.target.style.cursor = (els && els.length) ? 'pointer' : 'default'; },
             plugins: {
                 legend: { labels: { color: txtColor, boxWidth: 12 } },
                 tooltip: { callbacks: {
