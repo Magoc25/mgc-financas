@@ -5,6 +5,20 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.20.0] — Agosto 2026
+
+### 🆕 Adicionado
+- **Três formas de ver o gráfico Compras nos Cartões**, escolhidas nos botões acima dele:
+  - **Acumulado** — o ritmo do mês, em degraus (como era até aqui). Um degrau é um dia de gasto concentrado.
+  - **Por dia** — colunas dia a dia. O acumulado só sobe e por isso esconde a variação; aqui dá para ver claramente quais dias pesaram e quais não tiveram nada.
+  - **Por mês** — colunas do período inteiro, uma por mês. Mostra **em que meses você gastou mais e em quais gastou menos**. Nesta visão a data do dia não é necessária, então ela usa todas as parcelas.
+
+### 🔧 Melhorado
+- **A data agora é da parcela, e vale para as parcelas seguintes.** Antes, o dia valia como data da compra: um parcelamento aparecia uma única vez, pelo valor cheio, no mês em que foi lançado. Agora, ao informar o dia de uma parcela, **o app entende que as próximas caem no mesmo dia dos meses seguintes** — lançar *"fone, parcela 3/10, dia 10"* preenche sozinho as parcelas 4 a 10. Uma digitação, dez meses. Cada mês do gráfico passa a mostrar o que realmente sai naquele mês.
+- O título passou a ser **Compras nos Cartões**.
+
+---
+
 ## [4.19.0] — Agosto 2026
 
 ### 🆕 Adicionado

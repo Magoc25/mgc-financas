@@ -1060,11 +1060,18 @@ on conflict (id) do nothing;</div>
 
 <!-- Compras nos cartões ao longo do mês (v4.19.0) -->
 <div class="bg-white p-6 rounded-lg shadow-md">
-    <div class="flex justify-between items-center gap-3 flex-wrap mb-1">
-        <h2 class="text-lg font-semibold text-gray-700" id="comprasDiaTitle">Compras nos cartões ao longo do mês</h2>
-        <button onclick="exportarGrafico('comprasDiaChart','compras-por-dia')" class="chart-export-btn" title="Salvar como PNG">💾</button>
+    <div class="flex justify-between items-center gap-3 flex-wrap mb-2">
+        <h2 class="text-lg font-semibold text-gray-700" id="comprasDiaTitle">Compras nos Cartões</h2>
+        <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex gap-1 bg-gray-50 p-1 rounded-lg">
+                <button id="btnCompras_acumulado" onclick="setComprasModo('acumulado')" title="Acumulado dia a dia — mostra o ritmo do mês" class="px-2.5 py-1 text-xs rounded-md font-medium transition bg-indigo-600 text-white">Acumulado</button>
+                <button id="btnCompras_dia" onclick="setComprasModo('dia')" title="Colunas por dia — mostra a variação entre os dias" class="px-2.5 py-1 text-xs rounded-md font-medium transition bg-gray-100 text-gray-600 hover:bg-gray-200">Por dia</button>
+                <button id="btnCompras_mes" onclick="setComprasModo('mes')" title="Colunas por mês — mostra em que meses subiu ou caiu" class="px-2.5 py-1 text-xs rounded-md font-medium transition bg-gray-100 text-gray-600 hover:bg-gray-200">Por mês</button>
+            </div>
+            <button onclick="exportarGrafico('comprasDiaChart','compras-cartoes')" class="chart-export-btn" title="Salvar como PNG">💾</button>
+        </div>
     </div>
-    <p class="text-xs text-gray-400 mb-2">Cada linha é um cartão, somando as compras dia a dia. Um <strong>degrau</strong> mostra um dia de gasto concentrado. Compra parcelada conta pelo <strong>valor cheio, no dia em que foi feita</strong>.</p>
+    <p class="text-xs text-gray-400 mb-2">Uma cor por cartão. <strong>Acumulado</strong> mostra o ritmo do mês (um degrau = dia de gasto concentrado); <strong>Por dia</strong> mostra a variação entre os dias; <strong>Por mês</strong> compara os meses entre si. A parcela entra no <strong>dia em que ela cai</strong> — lançar o dia de uma parcela vale para as seguintes.</p>
     <p id="comprasDiaAviso" class="text-xs mb-3"></p>
     <div class="relative h-72 w-full overflow-x-auto">
         <div style="min-width:640px; height:100%;">
@@ -1520,7 +1527,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'Margem'; // © 2026 MGC Dev
-const APP_VERSION    = '4.19.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.20.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -3056,6 +3063,10 @@ let TOTAL_FIXED      = 0;
 let RENDA_MENSAL     = 0;
 // Séries mensais compartilhadas (dashboard, fluxo de caixa, simulador) — v4.10.0
 let RENDA_TOTAL_MES  = 0;   // renda do mês em foco = recorrente vigente + extra do mês
+// Isolamento de render (r63): um widget que lança não pode derrubar os seguintes.
+// Vive no escopo do módulo porque quem re-renderiza um gráfico sozinho (ex.: trocar o
+// modo do gráfico de compras) também precisa dele — local ao renderDashboard, não servia.
+const _safeRender = (fn, nome) => { try { fn(); } catch (e) { console.error('[render] falhou:', nome, e); } };
 let _fixasArr        = [];  // despesa fixa vigente por mês (índice = mês)
 let _rendaArr        = [];  // renda recorrente vigente por mês (índice = mês)
 let _rendaExtraArr   = [];  // renda extra por mês (índice = mês)
@@ -3287,11 +3298,10 @@ function renderDashboard() {
     // canvas de seção oculta no mobile) NÃO pode abortar os demais nem a TABELA de Fluxo de
     // Caixa / a narrativa. Era o bug v4.11.2: no celular a tabela ficava sem Faturas/Dívidas
     // porque um gráfico entre a barra e a tabela lançava e abortava renderDashboard.
-    const _safeRender = (fn, nome) => { try { fn(); } catch (e) { console.error('[render] falhou:', nome, e); } };
     _safeRender(() => renderBarChart(monthlyFaturasTotals, monthlyDividasTotals), 'barChart');
     _safeRender(() => renderPieChart(categoryTotalsThisMonth, valorDividaRef, mesRef, carriedMes), 'pieChart');
     _safeRender(() => renderCategoryTrendChart(monthlyDividasTotals), 'categoryTrendChart');
-    _safeRender(() => renderComprasDiaChart(monthNames[actualMonthIndexForCalc]), 'comprasDiaChart');
+    _safeRender(() => renderComprasDiaChart(), 'comprasDiaChart');
     _safeRender(() => renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef, rendaExtraMes, carriedMes), 'waterfallChart');
     _safeRender(() => renderFluxoCaixa(monthlyFaturasTotals, monthlyDividasTotals), 'fluxoCaixa');
     _safeRender(() => renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef, saldo, maxCatName, maxCatValue, perc, rendaExtraMes, carriedMes), 'narrativa');
@@ -3466,43 +3476,98 @@ function renderNarrativa(mesRef, totalSaidasMes, valorFaturaRef, valorDividaRef,
 let categoryTrendChart = null;
 let comprasDiaChart    = null;
 
-// Compras nos cartões ao longo do mês — ACUMULADO em degraus, uma linha por cartão.
-// Por que acumulado e não barras por dia: em finanças pessoais a maioria dos dias é R$ 0,
-// e uma série diária vira um gráfico quase vazio. A curva acumulada mostra o ritmo do mês
-// e transforma um dia pesado num degrau, que é justamente o que se quer enxergar.
-// A compra entra no DIA em que foi feita, pelo valor cheio: parcela de 12x não é uma
-// compra nova por mês. Compra sem `dia` fica de fora — e o aviso diz quantas são, com
-// atalho para preencher; aviso fixo o usuário ignora, contador que muda não.
-function renderComprasDiaChart(mesRef) {
+// Compras nos Cartões — três leituras da mesma informação, uma linha/coluna por cartão:
+//   'acumulado' : acumulado dia a dia do mês em foco (degraus) — mostra o RITMO do mês
+//   'dia'       : colunas por dia do mês em foco          — mostra a VARIAÇÃO entre dias
+//   'mes'       : colunas por mês, janela inteira         — mostra meses que subiram/caíram
+// O acumulado sozinho esconde variação (foi a queixa do usuário); as colunas por dia sozinhas
+// ficam esburacadas, porque na vida real a maioria dos dias é R$ 0. Por isso as três convivem.
+//
+// A DATA É DA PARCELA, e se propaga: `dia` é o dia do mês em que a parcela cai, e o app já
+// sabe em quais meses e por quanto (`projections`). Lançar "fone 3/10, dia 10" preenche
+// sozinho as parcelas 4..10 nos meses seguintes — uma digitação, dez meses. (Até a v4.19.0 o
+// campo era lido como data da COMPRA, com o valor cheio num mês só; mudou na v4.20.0.)
+let _comprasModo = 'acumulado';
+function setComprasModo(m) {
+    _comprasModo = m;
+    ['acumulado', 'dia', 'mes'].forEach(k => {
+        const b = document.getElementById('btnCompras_' + k);
+        if (b) b.className = 'px-2.5 py-1 text-xs rounded-md font-medium transition ' +
+            (k === m ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200');
+    });
+    _safeRender(() => renderComprasDiaChart(), 'comprasDiaChart');
+}
+function renderComprasDiaChart() {
     const ctx = document.getElementById('comprasDiaChart').getContext('2d');
     if (comprasDiaChart) comprasDiaChart.destroy();
     const txtColor  = chartTextColor();
     const gridColor = chartGridColor();
     const aviso     = document.getElementById('comprasDiaAviso');
     const titulo    = document.getElementById('comprasDiaTitle');
-    if (titulo) titulo.textContent = `Compras nos cartões — ${mesRef}`;
+    const i0        = _mesFocoIdx();
+    const mesRef    = monthNames[i0];
+    const porMes    = _comprasModo === 'mes';
+    if (titulo) titulo.textContent = porMes ? 'Compras nos Cartões — todos os meses' : `Compras nos Cartões — ${mesRef}`;
 
-    const doMes   = (appData.faturas || []).filter(f => f.mesInicio === mesRef);
-    const comData = doMes.filter(f => f.dia);
-    const semData = doMes.length - comData.length;
+    // parcelas que caem no mês em foco (projections já diz quais meses e quanto)
+    const noMes   = (processedData || []).filter(p => (p.projections[i0] || 0) > 0);
+    const semData = noMes.filter(p => !p.dia).length;
 
     if (aviso) {
-        aviso.innerHTML = semData
-            ? `<span class="text-amber-700">⚠ ${semData} de ${doMes.length} ${doMes.length === 1 ? 'compra deste mês está' : 'compras deste mês estão'} sem data e ${semData === 1 ? 'não entra' : 'não entram'} no gráfico.</span>
-               <button onclick="abrirDatasModal()" class="ml-1 underline font-medium text-indigo-500 hover:text-indigo-700">Preencher datas</button>`
-            : (doMes.length ? `<span class="text-emerald-600">✓ todas as ${doMes.length} compras deste mês têm data.</span>` : '');
+        aviso.innerHTML = porMes
+            ? `<span class="text-gray-400">Esta visão usa todas as parcelas do período — aqui a data do dia não é necessária.</span>`
+            : (semData
+                ? `<span class="text-amber-700">⚠ ${semData} de ${noMes.length} ${noMes.length === 1 ? 'parcela deste mês está' : 'parcelas deste mês estão'} sem dia e ${semData === 1 ? 'não entra' : 'não entram'} no gráfico.</span>
+                   <button onclick="abrirDatasModal()" class="ml-1 underline font-medium text-indigo-500 hover:text-indigo-700">Preencher datas</button>`
+                : (noMes.length ? `<span class="text-emerald-600">✓ todas as ${noMes.length} parcelas deste mês têm dia.</span>` : ''));
     }
 
+    // ── Visão por MÊS: uma coluna por mês, sem depender do dia ──────────────
+    if (porMes) {
+        const porCartaoM = {};
+        (processedData || []).forEach(p => {
+            if (!porCartaoM[p.card]) porCartaoM[p.card] = new Array(visibleMonths).fill(0);
+            p.projections.forEach((v, i) => { porCartaoM[p.card][i] += v || 0; });
+        });
+        const cartoesM = Object.keys(porCartaoM).filter(c => porCartaoM[c].some(v => v > 0));
+        comprasDiaChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: monthNames,
+                datasets: cartoesM.map(card => ({
+                    label: card, data: porCartaoM[card],
+                    backgroundColor: getColor(card), borderWidth: 0,
+                    borderRadius: { topLeft: 3, topRight: 3 }
+                }))
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { labels: { color: txtColor, boxWidth: 12 } },
+                    title: cartoesM.length ? { display: false } : { display: true, text: 'Sem parcelas de cartão no período', color: txtColor },
+                    tooltip: { callbacks: { label: c => `${c.dataset.label}: ${formatCurrency(c.parsed.y)}` } }
+                },
+                scales: {
+                    x: { stacked: true, title: { display: true, text: 'mês', color: txtColor }, ticks: { color: txtColor, maxRotation: 0, autoSkip: true }, grid: { color: gridColor } },
+                    y: { stacked: true, beginAtZero: true, ticks: { color: txtColor, callback: v => formatCurrency(v) }, grid: { color: gridColor } }
+                }
+            }
+        });
+        return;
+    }
+
+    // ── Visões por DIA (acumulado ou colunas) ───────────────────────────────
     // dias reais do mês (fev tem 28/29) — derivado do próprio rótulo, não do relógio
     const abs  = _absMonth(mesRef);
     const dias = isNaN(abs) ? 31 : new Date(Math.floor(abs / 12), (abs % 12) + 1, 0).getDate();
     const labels = Array.from({ length: dias }, (_, i) => String(i + 1));
 
     const porCartao = {};
-    comData.forEach(f => {
-        const d = Math.min(Math.max(parseInt(f.dia, 10), 1), dias);
-        if (!porCartao[f.card]) porCartao[f.card] = new Array(dias).fill(0);
-        porCartao[f.card][d - 1] += (f.amount || 0) * (f.total || 1);   // valor cheio da compra
+    noMes.filter(p => p.dia).forEach(p => {
+        const d = Math.min(Math.max(parseInt(p.dia, 10), 1), dias);
+        if (!porCartao[p.card]) porCartao[p.card] = new Array(dias).fill(0);
+        porCartao[p.card][d - 1] += p.projections[i0] || 0;   // valor da PARCELA daquele mês
     });
     const cartoes = Object.keys(porCartao);
 
@@ -3511,29 +3576,25 @@ function renderComprasDiaChart(mesRef) {
             type: 'line', data: { labels, datasets: [] },
             options: { responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { display: false }, title: { display: true, color: txtColor,
-                    text: doMes.length ? 'Nenhuma compra deste mês tem data ainda' : 'Sem compras de cartão neste mês' } },
-                // mesmos eixos do gráfico cheio: mês sem compra continua mostrando os dias
+                    text: noMes.length ? 'Nenhuma parcela deste mês tem dia ainda' : 'Sem parcelas de cartão neste mês' } },
+                // mesmos eixos das visões cheias: mês sem compra continua mostrando os dias
                 scales: { x: { title: { display: true, text: 'dia do mês', color: txtColor }, ticks: { color: txtColor }, grid: { color: gridColor } },
                           y: { beginAtZero: true, ticks: { color: txtColor }, grid: { color: gridColor } } } }
         });
         return;
     }
 
+    const acumulado = _comprasModo === 'acumulado';
     comprasDiaChart = new Chart(ctx, {
-        type: 'line',
+        type: acumulado ? 'line' : 'bar',
         data: {
             labels,
             datasets: cartoes.map(card => {
                 let soma = 0;
-                return {
-                    label: card,
-                    data: porCartao[card].map(v => (soma += v)),   // acumulado
-                    borderColor: getColor(card),
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    stepped: true
-                };
+                const serie = acumulado ? porCartao[card].map(v => (soma += v)) : porCartao[card];
+                return acumulado
+                    ? { label: card, data: serie, borderColor: getColor(card), backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, stepped: true }
+                    : { label: card, data: serie, backgroundColor: getColor(card), borderWidth: 0, borderRadius: { topLeft: 3, topRight: 3 } };
             })
         },
         options: {
@@ -3543,12 +3604,12 @@ function renderComprasDiaChart(mesRef) {
                 legend: { labels: { color: txtColor, boxWidth: 12 } },
                 tooltip: { callbacks: {
                     title: it => 'Dia ' + it[0].label,
-                    label: c => `${c.dataset.label}: ${formatCurrency(c.parsed.y)} acumulado`
+                    label: c => `${c.dataset.label}: ${formatCurrency(c.parsed.y)}${acumulado ? ' acumulado' : ''}`
                 } }
             },
             scales: {
-                x: { title: { display: true, text: 'dia do mês', color: txtColor }, ticks: { color: txtColor, maxRotation: 0, autoSkip: true }, grid: { color: gridColor } },
-                y: { beginAtZero: true, ticks: { color: txtColor, callback: v => formatCurrency(v) }, grid: { color: gridColor } }
+                x: { stacked: !acumulado, title: { display: true, text: 'dia do mês', color: txtColor }, ticks: { color: txtColor, maxRotation: 0, autoSkip: true }, grid: { color: gridColor } },
+                y: { stacked: !acumulado, beginAtZero: true, ticks: { color: txtColor, callback: v => formatCurrency(v) }, grid: { color: gridColor } }
             }
         }
     });
