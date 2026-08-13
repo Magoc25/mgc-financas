@@ -20,6 +20,8 @@ O app já está publicado online. Clique e use:
 
 **[▶ Abrir Margem](https://magoc25.github.io/mgc-financas/)**
 
+Quer entender antes de usar? **[📖 Conheça o Margem por dentro](https://magoc25.github.io/mgc-financas/apresentacao.html)** — uma apresentação com arquitetura, segurança e privacidade explicadas, em linguagem simples ou com detalhe técnico, você escolhe.
+
 Funciona em qualquer navegador moderno (Chrome, Edge, Firefox, Safari) — no celular, tablet ou computador. **Não precisa de cadastro, login, conta GitHub ou download de arquivos.** Após o primeiro acesso, o app funciona **offline**. Seus dados ficam **somente no seu dispositivo** (no armazenamento do próprio navegador).
 
 ### 📱 Instalar como app no seu dispositivo
@@ -236,6 +238,7 @@ SELECT cron.schedule(
 | Arquivo | Função |
 |---|---|
 | `mgc-financas.html` | Arquivo principal — interface, lógica e estilos |
+| `apresentacao.html` | Página de apresentação do app (arquitetura, segurança, privacidade) — independente do app, não afeta seu funcionamento |
 | `sw.js` | Service Worker — cache offline e instalação PWA |
 | `manifest.json` | Define o app como PWA (nome, ícones, display mode) |
 | `icon-192.png` | Ícone do app para telas iniciais e notificações |

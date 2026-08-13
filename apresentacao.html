@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- CSP própria — esta página não carrega NADA externo (CSS inline, SVG desenhado
+     à mão, zero biblioteca), então pode ser mais rígida que a do app:
+     nenhum CDN liberado e connect-src 'none' (a página não faz requisição alguma). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';">
+
+<title>Margem — o app por dentro</title>
+<meta name="description" content="Como funciona o Margem: arquitetura, segurança, privacidade e funcionalidades do dashboard financeiro pessoal que guarda seus dados só no seu aparelho.">
+<meta name="author" content="Marlon Gomes da Costa — MGC Dev">
+
+<meta name="theme-color" content="#F7F8F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1613" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:site_name" content="Margem">
+<meta property="og:title" content="Margem — o app por dentro">
+<meta property="og:description" content="Dashboard financeiro pessoal que roda no navegador, funciona offline e nunca envia seus dados a servidor nenhum. Arquitetura, segurança e privacidade explicadas.">
+<meta property="og:url" content="https://magoc25.github.io/mgc-financas/apresentacao.html">
+<meta property="og:image" content="https://magoc25.github.io/mgc-financas/icon-512.png">
+<meta name="twitter:card" content="summary">
+
+<style>
+  /* ============================================================
+     PALETA — papel "greenbar" (formulário contínuo da contabilidade)
+     Light completo no :root. Dark redefine SÓ os tokens, nas duas
+     formas (media query sem stamp + [data-theme="dark"] com stamp).
+     ============================================================ */
+  :root {
+    --paper:      #F7F8F4;
+    --band:       #E7EEE5;
+    --surface:    #FFFFFF;
+    --ink:        #16211C;
+    --muted:      #55655E;
+    --faint:      #7E8D86;
+    --rule:       #CBD6CE;
+    --rule-soft:  #E0E7E1;
+    --credit:     #1F6E4C;
+    --credit-dim: #2F8A63;
+    --debit:      #A33B2A;
+    --shadow:     0 1px 2px rgba(22, 33, 28, .06), 0 8px 24px rgba(22, 33, 28, .05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #0F1613;
+      --band:       #172220;
+      --surface:    #141E1A;
+      --ink:        #E6EDE7;
+      --muted:      #9CACA4;
+      --faint:      #7C8C84;
+      --rule:       #2B3A34;
+      --rule-soft:  #1F2C28;
+      --credit:     #62C494;
+      --credit-dim: #4EAE7F;
+      --debit:      #E28B77;
+      --shadow:     0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .28);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:      #0F1613;
+    --band:       #172220;
+    --surface:    #141E1A;
+    --ink:        #E6EDE7;
+    --muted:      #9CACA4;
+    --faint:      #7C8C84;
+    --rule:       #2B3A34;
+    --rule-soft:  #1F2C28;
+    --credit:     #62C494;
+    --credit-dim: #4EAE7F;
+    --debit:      #E28B77;
+    --shadow:     0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .28);
+  }
+
+  /* ============================================================
+     TIPOGRAFIA — 3 papéis
+     display: Palatino (algarismos de estilo antigo, útil em finanças)
+     corpo:   sans do sistema
+     dados:   monoespaçada com tabular-nums
+     ============================================================ */
+  :root {
+    --display: "Palatino Linotype", Palatino, "Book Antiqua", "Iowan Old Style", Georgia, serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.68;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 { font-family: var(--display); text-wrap: balance; margin: 0; font-weight: 600; }
+
+  a { color: var(--credit); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:hover { color: var(--ink); }
+
+  :focus-visible {
+    outline: 2px solid var(--credit);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  code, kbd, pre { font-family: var(--mono); }
+
+  /* ============================================================
+     ESTRUTURA — folha de razão: coluna de margem + coluna de texto
+     ============================================================ */
+  #page { overflow-x: hidden; }
+
+  .sheet {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 44px;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 22px;
+  }
+  @media (min-width: 1000px) {
+    .sheet { grid-template-columns: 178px minmax(0, 668px); justify-content: center; }
+  }
+
+  /* a "margem" da página: rótulo da seção */
+  .marg {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding-top: 8px;
+    line-height: 1.5;
+  }
+  @media (min-width: 1000px) {
+    .marg {
+      text-align: right;
+      border-right: 1px solid var(--rule);
+      padding-right: 22px;
+      padding-top: 12px;
+      min-height: 2.4em;
+    }
+  }
+  .marg .num { display: block; color: var(--credit); font-size: 13px; letter-spacing: .04em; }
+  .marg .note {
+    display: none;
+    margin-top: 18px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--faint);
+    font-style: normal;
+  }
+  @media (min-width: 1000px) { .marg .note { display: block; } }
+
+  section.sec { padding: 52px 0 8px; border-top: 1px solid var(--rule-soft); }
+  section.sec:first-of-type { border-top: none; }
+  .col { min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+  .col > * { margin: 0; }
+
+  h2 { font-size: clamp(1.55rem, 3.3vw, 2.15rem); line-height: 1.15; letter-spacing: -.01em; }
+  h3 { font-size: 1.1rem; line-height: 1.35; margin-top: 10px !important; }
+  p { max-width: 66ch; }
+  .lead { font-size: 1.12rem; color: var(--muted); max-width: 62ch; }
+
+  ul.list { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  ul.list li { padding-left: 20px; position: relative; max-width: 64ch; }
+  ul.list li::before {
+    content: ""; position: absolute; left: 2px; top: .72em;
+    width: 7px; height: 1.5px; background: var(--credit);
+  }
+  ul.list li b { font-weight: 600; }
+
+  /* ============================================================
+     ABERTURA
+     ============================================================ */
+  .hero { padding: 68px 0 44px; }
+  .hero .col { gap: 22px; }
+  .kicker {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--credit); margin: 0;
+  }
+  .hero h1 {
+    font-size: clamp(3rem, 9vw, 5.4rem);
+    line-height: .95;
+    letter-spacing: -.025em;
+  }
+  .hero h1 em { font-style: italic; color: var(--credit); }
+  .hero .lead { font-size: clamp(1.12rem, 2.2vw, 1.32rem); color: var(--muted); max-width: 34ch; }
+
+  .stamp {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: .04em;
+  }
+  .stamp span {
+    border: 1px solid var(--rule); border-radius: 999px;
+    padding: 4px 11px; color: var(--muted); background: var(--surface);
+  }
+  .stamp span.on { border-color: var(--credit); color: var(--credit); }
+
+  /* ============================================================
+     BARRA DE MODO — o mecanismo que serve os dois públicos
+     ============================================================ */
+  .modebar {
+    position: sticky; top: 0; z-index: 40;
+    background: var(--paper);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 6px;
+  }
+  .modebar .sheet { padding-top: 11px; padding-bottom: 11px; }
+  .modebar .inner {
+    grid-column: 1 / -1;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;
+    justify-content: space-between;
+  }
+  @media (min-width: 1000px) { .modebar .inner { grid-column: 2; } }
+  .modebar .hint {
+    font-size: 13px; color: var(--faint); margin: 0; max-width: 46ch; line-height: 1.45;
+  }
+  .switch { display: flex; border: 1px solid var(--rule); border-radius: 999px; padding: 3px; background: var(--surface); gap: 2px; }
+  .switch button {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase;
+    border: none; background: none; color: var(--muted);
+    padding: 7px 15px; border-radius: 999px; cursor: pointer;
+    transition: background .18s ease, color .18s ease;
+    white-space: nowrap;
+  }
+  .switch button:hover { color: var(--ink); }
+  /* --paper resolve para branco no claro e verde-escuro no escuro:
+     em ambos os casos é o contraste certo sobre --credit */
+  .switch button[aria-pressed="true"] { background: var(--credit); color: var(--paper); }
+
+  /* ============================================================
+     FICHA TÉCNICA — revelada pelo modo técnico
+     ============================================================ */
+  #page[data-mode="simples"] .tech { display: none; }
+  .tech {
+    border-left: 2px solid var(--credit);
+    background: var(--band);
+    padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 0 4px 4px 0;
+  }
+  .tech > * { margin: 0; }
+  .tech .tag {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--credit);
+  }
+  .tech p, .tech li { font-size: 15px; max-width: 62ch; }
+  .tech ul.list li::before { background: var(--credit-dim); }
+
+  pre {
+    margin: 0; overflow-x: auto; background: var(--surface);
+    border: 1px solid var(--rule); border-radius: 4px;
+    padding: 13px 15px; font-size: 12.5px; line-height: 1.62;
+    color: var(--ink); tab-size: 2;
+  }
+  code { font-size: .88em; }
+  p > code, li > code, td > code {
+    background: var(--band); border: 1px solid var(--rule-soft);
+    padding: .5px 5px; border-radius: 3px;
+  }
+  .tech pre { background: var(--paper); }
+  .tech p > code, .tech li > code, .tech td > code { background: var(--surface); }
+
+  /* ============================================================
+     TABELAS — banda alternada do papel greenbar
+     ============================================================ */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 420px; background: var(--surface); }
+  th, td { text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule-soft); }
+  th {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+  }
+  tbody tr:nth-child(even) { background: var(--band); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td b { font-weight: 600; }
+
+  /* ============================================================
+     PLACAR DE NÚMEROS
+     ============================================================ */
+  .scoreboard {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden;
+  }
+  .scoreboard div { background: var(--surface); padding: 15px 16px; display: flex; flex-direction: column; gap: 3px; }
+  .scoreboard .v {
+    font-family: var(--display); font-size: 1.72rem; line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+  }
+  .scoreboard .k {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--faint); line-height: 1.4;
+  }
+
+  /* ============================================================
+     FIGURAS
+     ============================================================ */
+  figure { margin: 0; display: flex; flex-direction: column; gap: 11px; }
+  .figbox { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 18px 16px; }
+  figure svg { display: block; width: 100%; height: auto; min-width: 460px; color: var(--ink); }
+  figcaption { font-size: 13.5px; color: var(--muted); max-width: 62ch; line-height: 1.55; }
+  .svg-band { fill: var(--band); }
+  .svg-surface { fill: var(--surface); }
+  .svg-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em; fill: var(--muted); }
+  .svg-title { font-family: var(--body); font-size: 12.5px; font-weight: 600; fill: var(--ink); }
+  .svg-sub { font-family: var(--body); font-size: 11px; fill: var(--muted); }
+  .svg-accent { stroke: var(--credit); }
+  .svg-accent-fill { fill: var(--credit); }
+  .svg-warn { stroke: var(--debit); }
+  .svg-warn-fill { fill: var(--debit); }
+
+  /* ============================================================
+     BLOCOS DE DESTAQUE
+     ============================================================ */
+  .callout {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 4px; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 9px;
+  }
+  .callout > * { margin: 0; }
+  .callout .tag {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .callout.warn { border-color: var(--debit); }
+  .callout.warn .tag { color: var(--debit); }
+
+  blockquote.pull {
+    margin: 6px 0; padding: 2px 0 2px 22px; border-left: 2px solid var(--credit);
+    font-family: var(--display); font-size: 1.28rem; line-height: 1.42;
+    color: var(--ink); max-width: 46ch;
+  }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .card > * { margin: 0; }
+  .card h3 { font-size: 1.02rem; margin-top: 0 !important; }
+  .card p, .card li { font-size: 14.5px; }
+  .card ul.list { gap: 7px; }
+
+  /* rodapé */
+  footer.foot { border-top: 1px solid var(--rule); margin-top: 56px; padding: 40px 0 60px; background: var(--band); }
+  footer.foot .col { gap: 14px; }
+  footer.foot p { font-size: 14.5px; color: var(--muted); }
+  .cta {
+    display: inline-flex; align-items: center; gap: 9px; align-self: flex-start;
+    background: var(--credit); color: var(--paper); text-decoration: none;
+    font-family: var(--mono); font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase;
+    padding: 12px 22px; border-radius: 3px; transition: opacity .18s ease;
+  }
+  .cta:hover { opacity: .86; color: var(--paper); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="page" data-mode="simples">
+
+  <!-- ============================ ABERTURA ============================ -->
+  <header class="hero">
+    <div class="sheet">
+      <div class="marg"><span class="num">§0</span>abertura</div>
+      <div class="col">
+        <p class="kicker">Dashboard financeiro pessoal · MGC Dev</p>
+        <h1>Margem</h1>
+        <p class="lead">Um app de controle financeiro que cabe em <em>um arquivo</em> — e que nunca vê o seu dinheiro.</p>
+        <div class="stamp">
+          <span class="on">dados só no seu aparelho</span>
+          <span>gratuito</span>
+          <span>sem cadastro</span>
+          <span>funciona offline</span>
+          <span>código auditável</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================ BARRA DE MODO ============================ -->
+  <nav class="modebar" aria-label="Profundidade da leitura">
+    <div class="sheet">
+      <div class="inner">
+        <p class="hint">Esta página tem duas profundidades. Ligue o detalhe técnico para ver código, algoritmos e configuração.</p>
+        <div class="switch" role="group" aria-label="Modo de leitura">
+          <button type="button" data-set-mode="simples" aria-pressed="true">Leitura simples</button>
+          <button type="button" data-set-mode="tecnico" aria-pressed="false">Detalhe técnico</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ============================ §1 O QUE É ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§1</span>o que é
+          <span class="note">Um site que se instala como aplicativo e guarda os dados no próprio aparelho.</span>
+        </div>
+        <div class="col">
+          <h2>Você abre um link. E acabou a instalação.</h2>
+          <p class="lead">Margem é um controle de contas mensais — receitas, despesas, cartões, dívidas, orçamentos e investimentos — que roda inteiro dentro do navegador.</p>
+          <p>Não tem cadastro, não tem login, não tem download obrigatório, não tem anúncio e não tem período de teste. Você abre o endereço, começa a lançar e os dados ficam salvos no seu próprio aparelho. Depois do primeiro acesso, ele continua funcionando sem internet.</p>
+          <p>A diferença mais importante em relação aos apps das lojas não é o preço. É <b>quem fica com os seus dados</b>: aqui, ninguém além de você. Nem o desenvolvedor.</p>
+
+          <!-- Só invariantes: nada aqui muda a cada release, então a página
+               não entra no fluxo de bump de versão e não envelhece sozinha. -->
+          <div class="scoreboard">
+            <div><span class="v">1</span><span class="k">arquivo HTML</span></div>
+            <div><span class="v">0</span><span class="k">cadastros exigidos</span></div>
+            <div><span class="v">0</span><span class="k">anúncios</span></div>
+            <div><span class="v">100%</span><span class="k">dos dados no seu aparelho</span></div>
+            <div><span class="v">2025</span><span class="k">em desenvolvimento desde</span></div>
+          </div>
+
+          <div class="tech">
+            <p class="tag">Ficha técnica</p>
+            <p>Todo o app — marcação, estilos, lógica de negócio, gráficos, simulador de investimentos e camada de sincronização — vive em <code>mgc-financas.html</code>. Não há <code>package.json</code>, bundler, transpilação ou etapa de build: o que está no repositório é exatamente o que roda no navegador, o que torna a auditoria do código direta.</p>
+            <p>Publicação é <code>git push</code> para o GitHub Pages. Não há servidor de aplicação em lugar nenhum.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §2 POR QUE EXISTE ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§2</span>por que existe
+          <span class="note">O incômodo com apps financeiros que cobram o acesso aos seus próprios números.</span>
+        </div>
+        <div class="col">
+          <h2>O problema com os apps de finanças</h2>
+          <p>Quem já procurou um app de controle financeiro conhece o roteiro: baixa, cria conta, entrega e-mail e telefone, digita um mês inteiro de gastos — e no trigésimo dia descobre que o relatório que interessa está atrás de uma assinatura. Ou que o app fecha. Ou que os dados agora moram no servidor de uma empresa que você não escolheu.</p>
+          <blockquote class="pull">Seus lançamentos são o registro da sua vida. Eles não deveriam ser a moeda de troca do app.</blockquote>
+          <ul class="list">
+            <li><b>Sem propaganda.</b> Apps "gratuitos" nas lojas se pagam com anúncio ou com dado. Este não faz nem um nem outro.</li>
+            <li><b>Sem prazo.</b> Não existe versão de teste que expira, nem função que trava depois de 30 dias.</li>
+            <li><b>Sem cadastro — nem para sincronizar.</b> Quando você quer os dados no celular e no computador ao mesmo tempo, a sincronização acontece pelo <em>seu</em> banco de dados, não pelo de uma empresa intermediária.</li>
+            <li><b>Sem internet obrigatória.</b> Abre no avião, no ônibus, no interior sem sinal.</li>
+          </ul>
+          <p>O custo honesto dessa escolha: configurar a sincronização entre aparelhos dá um pouco mais de trabalho do que clicar em "Instalar" numa loja. É uma configuração de cinco minutos, feita uma única vez, e totalmente opcional.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §3 ARQUITETURA ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§3</span>arquitetura
+          <span class="note">Um arquivo, três bibliotecas, nenhum servidor de aplicação.</span>
+        </div>
+        <div class="col">
+          <h2>Como o app é construído</h2>
+          <p>Margem é um <b>PWA</b> — sigla de <em>Progressive Web App</em>, que é o nome técnico para "site que se comporta como aplicativo instalado". Ele ganha ícone na tela inicial, abre em janela própria e funciona sem conexão.</p>
+
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr><th>Peça</th><th>O que é</th><th>Para que serve aqui</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><b>JavaScript puro</b></td><td>A linguagem que todo navegador já entende, sem biblioteca por cima</td><td>Toda a lógica: cálculos, telas, formulários, regras de vigência</td></tr>
+                <tr><td><b>Tailwind CSS</b></td><td>Um catálogo de estilos visuais prontos</td><td>Aparência: espaçamentos, cores, tema claro e escuro</td></tr>
+                <tr><td><b>Chart.js</b></td><td>Biblioteca de gráficos</td><td>Pizza, barras, linha e o gráfico de compras nos cartões</td></tr>
+                <tr><td><b>supabase-js</b></td><td>Cliente de banco de dados</td><td>Sincronização opcional entre aparelhos</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>Repare no que <em>não</em> está na lista: não há React, Vue, Angular ou qualquer framework de interface. Foi uma decisão de projeto, não uma lacuna — o requisito era um app que abre direto no navegador e roda como arquivo solto, e uma etapa de build trabalharia contra isso.</p>
+
+          <h3>O que faz ele funcionar sem internet</h3>
+          <p>Um <b>service worker</b> é um script que fica em segundo plano, entre o app e a rede, como um porteiro. Na primeira visita ele guarda uma cópia de tudo. Nas seguintes, se a rede falhar, ele entrega a cópia guardada em vez de mostrar erro.</p>
+
+          <figure>
+            <div class="figbox">
+              <svg viewBox="0 0 680 236" role="img" aria-label="O service worker intercepta cada pedido de arquivo: tenta a rede primeiro, guarda uma cópia do que baixa e, quando a rede falha, entrega a cópia do cache.">
+                <defs>
+                  <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+                  </marker>
+                  <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" class="svg-accent-fill"/>
+                  </marker>
+                </defs>
+
+                <rect x="8" y="86" width="132" height="64" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1"/>
+                <text x="74" y="112" text-anchor="middle" class="svg-title">App aberto</text>
+                <text x="74" y="130" text-anchor="middle" class="svg-sub">no navegador</text>
+
+                <rect x="212" y="80" width="152" height="76" rx="3" class="svg-band" stroke="currentColor" stroke-width="1"/>
+                <text x="288" y="106" text-anchor="middle" class="svg-title">Service worker</text>
+                <text x="288" y="124" text-anchor="middle" class="svg-sub">sw.js — o porteiro</text>
+                <text x="288" y="142" text-anchor="middle" class="svg-label">cache versionado</text>
+
+                <rect x="452" y="20" width="220" height="62" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1"/>
+                <text x="562" y="46" text-anchor="middle" class="svg-title">Internet</text>
+                <text x="562" y="64" text-anchor="middle" class="svg-sub">GitHub Pages</text>
+
+                <rect x="452" y="154" width="220" height="62" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/>
+                <text x="562" y="180" text-anchor="middle" class="svg-title">Cópia guardada</text>
+                <text x="562" y="198" text-anchor="middle" class="svg-sub">no seu aparelho</text>
+
+                <line x1="140" y1="118" x2="206" y2="118" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+                <text x="173" y="108" text-anchor="middle" class="svg-label">pede</text>
+
+                <path d="M 364 104 L 410 104 L 410 51 L 446 51" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+                <text x="410" y="94" text-anchor="middle" class="svg-label">1 · tenta a rede</text>
+
+                <path d="M 364 134 L 410 134 L 410 185 L 446 185" fill="none" class="svg-accent" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arg)"/>
+                <text x="412" y="152" text-anchor="middle" class="svg-label">2 · se falhar, usa a cópia</text>
+
+                <path d="M 606 82 L 606 148" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+                <text x="614" y="118" class="svg-label">guarda tudo que baixa</text>
+              </svg>
+            </div>
+            <figcaption>O caminho de cada arquivo pedido pelo app. A seta 2 é a que existe só porque o service worker está ali — sem ele, rede fora significa tela de erro.</figcaption>
+          </figure>
+
+          <div class="tech">
+            <p class="tag">Ficha técnica · arquivos e estratégia de cache</p>
+            <ul class="list">
+              <li><code>mgc-financas.html</code> — o app completo: interface, regras de negócio, gráficos e sincronização</li>
+              <li><code>sw.js</code> — service worker com cache versionado por release, estratégia <em>rede primeiro, cache como reserva</em>: sempre tenta a rede, guarda uma cópia do que recebe e só recorre à reserva quando a requisição falha</li>
+              <li><code>manifest.json</code> — nome, ícones e <code>display mode</code> que habilitam o convite de instalação</li>
+              <li><code>index.html</code> — redireciona a raiz para o app</li>
+            </ul>
+            <p>A ativação de uma versão nova descarta todo cache cujo nome não seja o da versão corrente, então renomear o cache a cada release invalida o anterior de forma determinística — sem depender de expiração nem de limpeza manual pelo usuário.</p>
+            <p>Só requisições <em>GET</em> são interceptadas: envios de dados nunca são servidos de cache. E o app compara a própria versão com a publicada, exibindo banner de atualização quando fica para trás.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §4 ONDE FICAM OS DADOS ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§4</span>onde ficam os dados
+          <span class="note">O modelo de três camadas — e a seta que não existe.</span>
+        </div>
+        <div class="col">
+          <h2>Quem guarda o quê</h2>
+          <p class="lead">Esta é a pergunta que decide se um app financeiro merece confiança. A resposta do Margem é estrutural, não é promessa.</p>
+          <p>O app separa o que existe em três camadas, com donos diferentes. O desenvolvedor controla só a primeira — e ela não contém nenhum dado financeiro de ninguém.</p>
+
+          <figure>
+            <div class="figbox">
+              <svg viewBox="0 0 760 400" role="img" aria-label="Diagrama de três camadas: a infraestrutura do desenvolvedor entrega o código e recebe apenas um ping anônimo por dia; os dados financeiros ficam no dispositivo do usuário; a sincronização opcional acontece com o banco do próprio usuário. O caminho dos dados financeiros até o desenvolvedor não existe.">
+                <defs>
+                  <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+                  </marker>
+                  <marker id="a2g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" class="svg-accent-fill"/>
+                  </marker>
+                </defs>
+
+                <!-- Camada 1 -->
+                <rect x="16" y="76" width="196" height="132" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1"/>
+                <text x="30" y="60" class="svg-label">CAMADA 1 · DESENVOLVEDOR</text>
+                <text x="114" y="106" text-anchor="middle" class="svg-title">GitHub Pages</text>
+                <text x="114" y="123" text-anchor="middle" class="svg-sub">hospeda o código</text>
+                <line x1="40" y1="139" x2="188" y2="139" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".5"/>
+                <text x="114" y="160" text-anchor="middle" class="svg-title">Supabase compartilhado</text>
+                <text x="114" y="177" text-anchor="middle" class="svg-sub">avaliações · contagem</text>
+                <text x="114" y="193" text-anchor="middle" class="svg-sub">de dispositivos</text>
+
+                <!-- Camada 2 -->
+                <rect x="282" y="52" width="196" height="180" rx="3" class="svg-band" stroke="currentColor" stroke-width="1.6"/>
+                <text x="296" y="38" class="svg-label">CAMADA 2 · VOCÊ</text>
+                <text x="380" y="84" text-anchor="middle" class="svg-title">Seu aparelho</text>
+                <text x="380" y="104" text-anchor="middle" class="svg-sub">armazenamento do navegador</text>
+                <line x1="306" y1="122" x2="454" y2="122" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".5"/>
+                <text x="380" y="145" text-anchor="middle" class="svg-sub">lançamentos · cartões</text>
+                <text x="380" y="163" text-anchor="middle" class="svg-sub">dívidas · faturas</text>
+                <text x="380" y="181" text-anchor="middle" class="svg-sub">orçamentos · metas</text>
+                <text x="380" y="199" text-anchor="middle" class="svg-sub">investimentos</text>
+                <text x="380" y="220" text-anchor="middle" class="svg-label">100% DOS SEUS NÚMEROS</text>
+
+                <!-- Camada 3 -->
+                <rect x="548" y="76" width="196" height="132" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1" stroke-dasharray="5 4"/>
+                <text x="562" y="60" class="svg-label">CAMADA 3 · VOCÊ (OPCIONAL)</text>
+                <text x="646" y="112" text-anchor="middle" class="svg-title">Seu Supabase</text>
+                <text x="646" y="131" text-anchor="middle" class="svg-sub">conta sua, chaves suas,</text>
+                <text x="646" y="149" text-anchor="middle" class="svg-sub">você liga e desliga</text>
+                <text x="646" y="176" text-anchor="middle" class="svg-label">só se você configurar</text>
+
+                <!-- setas -->
+                <path d="M 212 108 L 276 108" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#a2)"/>
+                <text x="244" y="98" text-anchor="middle" class="svg-label">o app</text>
+
+                <path d="M 276 186 L 216 186" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#a2)"/>
+                <text x="246" y="204" text-anchor="middle" class="svg-label">1 ping/dia</text>
+                <text x="246" y="218" text-anchor="middle" class="svg-label">(nº aleatório)</text>
+
+                <path d="M 478 142 L 542 142" fill="none" class="svg-accent" stroke-width="1.6" marker-end="url(#a2g)" marker-start="url(#a2g)"/>
+                <text x="510" y="132" text-anchor="middle" class="svg-label">seus dados</text>
+
+                <!-- caminho inexistente -->
+                <path d="M 330 232 L 330 316 L 128 316 L 128 212" fill="none" class="svg-warn" stroke-width="1.4" stroke-dasharray="6 5" opacity=".75"/>
+                <line x1="216" y1="303" x2="242" y2="329" class="svg-warn" stroke-width="2.2"/>
+                <line x1="242" y1="303" x2="216" y2="329" class="svg-warn" stroke-width="2.2"/>
+                <text x="380" y="352" text-anchor="middle" class="svg-title">Este caminho não existe</text>
+                <text x="380" y="372" text-anchor="middle" class="svg-sub">nenhum dado financeiro seu chega ao desenvolvedor — não há código que o envie</text>
+              </svg>
+            </div>
+            <figcaption>A consequência prática: mesmo que a infraestrutura do desenvolvedor fosse inteiramente comprometida, não haveria dado financeiro de usuário para vazar. Não existe cópia para ser roubada.</figcaption>
+          </figure>
+
+          <div class="tech">
+            <p class="tag">Ficha técnica · persistência</p>
+            <p>Os dados vivem no <code>localStorage</code> do navegador, serializados como um único documento JSON sob uma chave dedicada. Na abertura o app lê essa chave e normaliza o formato — é aí que acontecem as migrações de esquema, o que permite que um backup antigo continue sendo importável depois de meses de mudanças.</p>
+            <p>Toda ação passa por um caminho único de gravação, que faz três coisas na mesma ordem: carimba o que mudou com identificador e data de alteração, grava o documento inteiro no armazenamento local, e só então dispara a sincronização, se ela estiver configurada. Caminho único porque duas rotinas que gravam envelhecem desencontradas.</p>
+            <p>As credenciais do Supabase do usuário também ficam apenas no armazenamento local do navegador — nunca no código-fonte publicado, nunca numa variável de build, nunca num arquivo de configuração versionado.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §5 SEGURANÇA ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§5</span>segurança
+          <span class="note">O que está protegido, por qual mecanismo, e o que é responsabilidade sua.</span>
+        </div>
+        <div class="col">
+          <h2>As defesas, uma a uma</h2>
+          <p>Como as Camadas 2 e 3 são suas, a superfície de ataque que sobra para o desenvolvedor defender é pequena — e é exatamente onde o esforço foi concentrado.</p>
+
+          <div class="grid2">
+            <div class="card">
+              <h3>Contra código injetado</h3>
+              <p>Tudo que um usuário digita e aparece na tela passa por uma função de escape antes de ser renderizado. Isso impede que um texto se transforme em comando.</p>
+            </div>
+            <div class="card">
+              <h3>Trava no próprio navegador</h3>
+              <p>Uma política declarada no topo do arquivo diz ao navegador exatamente de quais endereços ele pode carregar código e para onde pode enviar dados. Qualquer coisa fora dessa lista é bloqueada pelo próprio navegador.</p>
+            </div>
+            <div class="card">
+              <h3>No banco compartilhado</h3>
+              <p>As avaliações públicas — o único conteúdo que uma pessoa escreve e outras leem — têm limite de tamanho, bloqueio de padrões de injeção e intervalo mínimo entre envios, aplicados como regra do banco.</p>
+            </div>
+            <div class="card">
+              <h3>Tudo cifrado em trânsito</h3>
+              <p>Toda comunicação usa HTTPS, tanto na entrega do app quanto na sincronização.</p>
+            </div>
+          </div>
+
+          <div class="tech">
+            <p class="tag">Ficha técnica · controles implementados</p>
+            <p><b>XSS.</b> Uma função de escape neutraliza os cinco caracteres que separam texto de marcação, e é aplicada a todo campo de usuário antes de qualquer renderização. Para valores que acabam dentro de um manipulador de evento existe uma segunda função, que compõe sobre a primeira: o escape de JavaScript precisa acontecer <em>antes</em> do escape de HTML, porque a ordem inversa deixa passar aspas já convertidas.</p>
+            <p><b>CSP.</b> Uma Content Security Policy declarada no cabeçalho do documento restringe a origem de todo script a uma lista fechada, proíbe plugins e <code>&lt;base&gt;</code> reescrito, e limita o destino de qualquer requisição de rede ao próprio domínio e ao serviço de sincronização.</p>
+            <p>Essa última diretiva é a trava de exfiltração, e é a mais importante das quatro: mesmo na hipótese de um script hostil conseguir executar, ele não teria para onde enviar o que lesse — o navegador bloqueia o envio antes que ele saia da máquina.</p>
+            <p><b>Backend compartilhado.</b> Row Level Security habilitada em todas as tabelas. Na de avaliações, restrições declaradas no próprio banco impõem limite de tamanho a nome e comentário, rejeitam padrões de injeção de marcação e aplicam intervalo mínimo entre submissões. Validação no servidor, não só na tela — o que roda no navegador é conveniência, não defesa.</p>
+            <p><b>Chaves do Supabase do usuário.</b> Só a chave publicável é usada — projetada para ficar exposta no cliente, com a segurança real vindo das políticas de acesso do banco. A chave secreta nunca entra no app, e a documentação de configuração adverte explicitamente contra colá-la.</p>
+          </div>
+
+          <div class="callout warn">
+            <p class="tag">Honestidade sobre o PIN</p>
+            <p>O PIN de 4 a 8 dígitos é uma <b>tela de bloqueio</b>, não criptografia. Ele impede que alguém que pegue seu celular destravado veja seus números de relance — e é ótimo nisso. Mas ele não cifra os dados: quem tiver acesso técnico ao aparelho contorna a tela. A proteção de verdade dos seus dados é a senha do próprio dispositivo.</p>
+          </div>
+
+          <h3>O que fica com você</h3>
+          <ul class="list">
+            <li>Manter o aparelho com senha e atualizado</li>
+            <li>Guardar as chaves do seu Supabase, se usar sincronização</li>
+            <li>Exportar backup periodicamente — o app tem botão para isso</li>
+            <li>Aplicar as atualizações quando o banner aparecer</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §6 PRIVACIDADE ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§6</span>privacidade
+          <span class="note">Duas informações saem do aparelho. Ambas listadas aqui.</span>
+        </div>
+        <div class="col">
+          <h2>Exatamente o que é coletado</h2>
+          <p>A lista abaixo é completa. Não há terceiro item.</p>
+
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr><th>O quê</th><th>Quando</th><th>O que contém</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>Contagem de aparelho</b></td>
+                  <td class="num">1× por dia</td>
+                  <td>Um número aleatório gerado no seu aparelho, o nome do app, a versão e a data. Sem IP, sem localização, sem modelo de aparelho, sem nada que ligue esse número a você.</td>
+                </tr>
+                <tr>
+                  <td><b>Avaliação do app</b></td>
+                  <td class="num">só se você enviar</td>
+                  <td>O nome que você digitar, a nota em estrelas e o comentário, se escrever. Aparece publicamente para os outros usuários — então não escreva nada pessoal ali.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>Nenhum lançamento, valor, saldo, dívida, meta ou simulação é transmitido. Nada é vendido, cedido ou usado para publicidade.</p>
+
+          <div class="tech">
+            <p class="tag">Ficha técnica · LGPD</p>
+            <p>O projeto opera como <b>ATPP</b> (Agente de Tratamento de Pequeno Porte, Resolução CD/ANPD nº 2/2022) e mantém documentação formal: aviso de privacidade, inventário de tratamento (Art. 37), política de segurança com plano de resposta a incidentes segundo a Resolução CD/ANPD nº 15/2024, e declaração de acessibilidade.</p>
+            <div class="tablewrap">
+              <table>
+                <thead><tr><th>Dado</th><th>Base legal</th><th>Operador</th></tr></thead>
+                <tbody>
+                  <tr><td><code>device_id</code> (UUID v4), versão, data</td><td>Legítimo interesse — Art. 7º, IX</td><td>Supabase Inc. (EUA, SCCs)</td></tr>
+                  <tr><td>Nome, comentário e nota da avaliação</td><td>Consentimento — Art. 7º, I</td><td>Supabase Inc. (EUA, SCCs)</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>O <code>device_id</code> é gerado com <code>crypto.randomUUID()</code> no próprio aparelho e guardado localmente — é pseudônimo não vinculável, sem chave de correlação com dado pessoal. Direitos do titular (LGPD Art. 18) são atendidos por e-mail em até 15 dias úteis.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §7 FUNCIONALIDADES ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§7</span>funcionalidades
+          <span class="note">Contas do mês, planejamento e um módulo de renda fixa.</span>
+        </div>
+        <div class="col">
+          <h2>O que dá para fazer</h2>
+
+          <h3>O mês a mês</h3>
+          <ul class="list">
+            <li><b>Lançamentos</b> de receita e despesa com categoria, cartão e mês de referência, navegação rápida entre meses e modo compacto.</li>
+            <li><b>Sugestões de descrição</b> — o app aprende o que você digita e completa sozinho, com tela para apagar as sugestões erradas.</li>
+            <li><b>Dia da compra</b> nos lançamentos de cartão: a data escolhida fica guardada, se propaga para as próximas parcelas, e há uma tela para preencher em massa as compras antigas sem data.</li>
+            <li><b>Vigência em renda e despesa fixa</b> — alterar, incluir ou cortar vale a partir do mês escolhido, e o histórico dos meses anteriores fica intacto. É o que separa "meu aluguel aumentou" de "meu aluguel sempre foi esse valor".</li>
+            <li><b>Dívidas, faturas e orçamentos</b> com vencimento, situação e limite mensal por categoria com indicador de consumo.</li>
+            <li><b>Cartões e categorias</b> personalizados, com ícone, cor e bandeira.</li>
+          </ul>
+
+          <h3>Análise</h3>
+          <ul class="list">
+            <li>Pizza por categoria, barras de receitas contra despesas, linha da evolução do saldo.</li>
+            <li><b>Compras nos cartões</b> em três visões: acumulado (o ritmo do mês), colunas por dia (quais dias pesaram) e colunas por mês (quando subiu ou caiu). Clicar numa coluna abre as compras daquele ponto, uma a uma.</li>
+          </ul>
+
+          <h3>Planejamento</h3>
+          <ul class="list">
+            <li><b>Renda extra pontual</b> — 13º, restituição, bônus — que conta só no mês escolhido, sem virar renda recorrente.</li>
+            <li><b>Trazer o déficit do mês anterior</b> com um marcador por mês, refletindo em cartões, gráficos e saldo.</li>
+            <li><b>Planejamento de quitação</b> — projeta o saldo mês a mês e diz <em>em que mês você zera o déficit</em>. Ajuste quanto guardar e veja o resultado ao vivo, ou defina o mês-alvo e descubra quanto precisa poupar.</li>
+          </ul>
+
+          <h3>Investimentos — renda fixa</h3>
+          <ul class="list">
+            <li><b>Simulador</b> de Poupança, CDB, LCI/LCA, Tesouro Selic e Tesouro IPCA+, com juros compostos, aportes mensais e <b>IR regressivo</b>.</li>
+            <li><b>Taxas editáveis</b> (CDI, Selic, IPCA) e cálculo da rentabilidade <em>real</em>, já descontada a inflação.</li>
+            <li><b>Comparador</b> dos produtos lado a lado, em tabela e gráfico.</li>
+            <li><b>Meta</b> — quanto poupar por mês para chegar a um objetivo — com exportação dos cenários em CSV.</li>
+            <li><b>Glossário</b> e cenários prontos, para quem está aprendendo.</li>
+          </ul>
+
+          <h3>No celular</h3>
+          <ul class="list">
+            <li>Duas abas no topo (Contas e Investir), cada uma com sua barra de navegação inferior.</li>
+            <li>Botão flutuante para novo lançamento, sempre à mão, e formulários em painéis deslizantes.</li>
+            <li>Instalável no Android, iOS e desktop, com banner de instalação no primeiro acesso.</li>
+          </ul>
+
+          <div class="callout">
+            <p class="tag">Modo privacidade</p>
+            <p>Um interruptor por aba troca todos os valores por <code>R$ ••••</code>. Serve para mostrar o app a alguém, projetar numa tela ou usar em público sem expor quanto você tem. É, aliás, o modo usado nas demonstrações deste projeto.</p>
+          </div>
+
+          <div class="tech">
+            <p class="tag">Ficha técnica · dados e histórico</p>
+            <ul class="list">
+              <li><b>Backup JSON</b> — exporta lançamentos, dívidas, faturas, categorias, cartões, orçamentos, cenários de investimento e configurações; a importação valida a estrutura antes de aplicar.</li>
+              <li><b>Histórico de alterações</b> — as últimas 150 ações (adição, edição, remoção, duplicação) ficam registradas.</li>
+              <li><b>Tabelas ordenáveis</b> por coluna e duplicação de registro em um clique.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §8 SINCRONIZAÇÃO ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§8</span>sincronização
+          <span class="note">Opcional, no seu banco, e escrita de forma que nada se perca.</span>
+        </div>
+        <div class="col">
+          <h2>Dois aparelhos, um dado só</h2>
+          <p>Se você quiser ver as mesmas contas no computador e no celular, cria uma conta gratuita no Supabase, roda um trecho de SQL que o app entrega pronto e cola duas chaves na tela de configuração. São cinco minutos, uma vez.</p>
+          <p>O banco é <b>seu</b>. O desenvolvedor não tem acesso a ele, não conhece suas chaves e não consegue lê-lo. Se você fechar a conta amanhã, perde a sincronização e continua com todos os dados no aparelho.</p>
+
+          <h3>Por que nada se perde</h3>
+          <p>Sincronizar é fácil quando um aparelho só escreve. O problema aparece quando dois escrevem: se cada um simplesmente gravasse a sua versão por cima, o último a salvar apagaria o lançamento que você fez no outro. O Margem nunca grava sem antes ler e fundir.</p>
+
+          <figure>
+            <div class="figbox">
+              <svg viewBox="0 0 760 250" role="img" aria-label="O ciclo de sincronização em quatro passos: ler a versão da nuvem, fundir com a local por identificador e data de alteração, salvar o resultado no aparelho e só então gravar na nuvem. Se a leitura falhar, o ciclo para antes de gravar.">
+                <defs>
+                  <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+                  </marker>
+                  <marker id="a3w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" class="svg-warn-fill"/>
+                  </marker>
+                </defs>
+
+                <rect x="10" y="46" width="164" height="86" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1"/>
+                <text x="92" y="34" text-anchor="middle" class="svg-label">PASSO 1</text>
+                <text x="92" y="78" text-anchor="middle" class="svg-title">Ler a nuvem</text>
+                <text x="92" y="98" text-anchor="middle" class="svg-sub">busca a versão que</text>
+                <text x="92" y="114" text-anchor="middle" class="svg-sub">está lá agora</text>
+
+                <rect x="206" y="46" width="164" height="86" rx="3" class="svg-band" stroke="currentColor" stroke-width="1.6"/>
+                <text x="288" y="34" text-anchor="middle" class="svg-label">PASSO 2</text>
+                <text x="288" y="78" text-anchor="middle" class="svg-title">Fundir</text>
+                <text x="288" y="98" text-anchor="middle" class="svg-sub">compara item a item</text>
+                <text x="288" y="114" text-anchor="middle" class="svg-sub">pela data de alteração</text>
+
+                <rect x="402" y="46" width="164" height="86" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1"/>
+                <text x="484" y="34" text-anchor="middle" class="svg-label">PASSO 3</text>
+                <text x="484" y="78" text-anchor="middle" class="svg-title">Salvar local</text>
+                <text x="484" y="98" text-anchor="middle" class="svg-sub">o resultado fundido</text>
+                <text x="484" y="114" text-anchor="middle" class="svg-sub">vira a base do aparelho</text>
+
+                <rect x="598" y="46" width="152" height="86" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1"/>
+                <text x="674" y="34" text-anchor="middle" class="svg-label">PASSO 4</text>
+                <text x="674" y="78" text-anchor="middle" class="svg-title">Gravar na nuvem</text>
+                <text x="674" y="98" text-anchor="middle" class="svg-sub">envia o fundido,</text>
+                <text x="674" y="114" text-anchor="middle" class="svg-sub">não a versão crua</text>
+
+                <line x1="174" y1="89" x2="200" y2="89" stroke="currentColor" stroke-width="1.2" marker-end="url(#a3)"/>
+                <line x1="370" y1="89" x2="396" y2="89" stroke="currentColor" stroke-width="1.2" marker-end="url(#a3)"/>
+                <line x1="566" y1="89" x2="592" y2="89" stroke="currentColor" stroke-width="1.2" marker-end="url(#a3)"/>
+
+                <path d="M 92 132 L 92 186" fill="none" class="svg-warn" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#a3w)"/>
+                <rect x="10" y="188" width="330" height="48" rx="3" class="svg-surface" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/>
+                <text x="26" y="210" class="svg-title">Leitura falhou? O ciclo para aqui.</text>
+                <text x="26" y="228" class="svg-sub">Fica salvo no aparelho e sobe na próxima vez.</text>
+              </svg>
+            </div>
+            <figcaption>Gravar sem ter lido antes é justamente o que apagaria o lançamento feito no outro aparelho — por isso a falha de leitura interrompe o ciclo em vez de seguir para a escrita.</figcaption>
+          </figure>
+
+          <div class="tech">
+            <p class="tag">Ficha técnica · o algoritmo</p>
+            <p>Escrita por <b>caminho único</b>: a abertura do app e o salvamento de uma ação entram exatamente na mesma rotina. O ciclo é sempre <em>ler, fundir, gravar</em>, contra uma linha única cujo conteúdo é o documento JSON inteiro — o app não tem tabelas por entidade, tem um documento versionado.</p>
+            <p>A guarda que sustenta tudo cabe numa frase: <b>leitura falhou, não grava.</b> Sem ela, o app gravaria sua versão local sobre a remota sem ter fundido — que é exatamente a operação que apaga o lançamento feito no outro aparelho.</p>
+            <ul class="list">
+              <li><b>Carimbos.</b> Cada item ganha identificador próprio e data de alteração no momento em que é salvo; a fusão resolve o conflito pelo mais recente, item a item, e não documento contra documento.</li>
+              <li><b>Marcadores de exclusão.</b> Apagar não faz o item sumir — grava um marcador dizendo que ele foi removido. Sem isso, a fusão traria de volta o item apagado num aparelho a partir da cópia do outro, e ele ressuscitaria sozinho.</li>
+              <li><b>Fila serializada.</b> As sincronizações são encadeadas, então duas ações rápidas não disputam a mesma linha. Uma falha não trava a fila.</li>
+              <li><b>Offline seguro.</b> Sem rede o app avisa uma vez, mantém tudo no armazenamento local e sobe na próxima oportunidade. Nada é descartado por falta de conexão.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §9 LIMITAÇÕES ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§9</span>limitações
+          <span class="note">O que ainda não está pronto, dito antes de você descobrir sozinho.</span>
+        </div>
+        <div class="col">
+          <h2>O que este app ainda não é</h2>
+          <p class="lead">Um projeto que só lista qualidades está escondendo alguma coisa. Aqui está o outro lado.</p>
+
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>Limitação</th><th>O que isso significa na prática</th></tr></thead>
+              <tbody>
+                <tr><td><b>Acessibilidade parcial</b></td><td>Conformidade parcial com WCAG 2.2 nível A, sem auditoria formal. Os gráficos não têm descrição alternativa, então quem usa leitor de tela não acessa o conteúdo deles.</td></tr>
+                <tr><td><b>PIN não é criptografia</b></td><td>Protege de olhares casuais, não de acesso técnico ao aparelho.</td></tr>
+                <tr><td><b>Backup é manual</b></td><td>Sem sincronização configurada, limpar os dados do navegador apaga tudo. Exporte o JSON de vez em quando.</td></tr>
+                <tr><td><b>Um desenvolvedor só</b></td><td>Projeto pessoal, mantido nas horas livres. Correções saem rápido, mas não há equipe nem SLA.</td></tr>
+                <tr><td><b>Sem integração bancária</b></td><td>Não importa extrato nem conecta com banco — os lançamentos são digitados por você. Isso é consequência direta de não haver servidor.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>Nada disso é acidente escondido: cada item está documentado nos arquivos públicos do repositório, com canal aberto para relato de problemas de acessibilidade e de segurança.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ §10 PROJETO ============================ -->
+    <section class="sec">
+      <div class="sheet">
+        <div class="marg">
+          <span class="num">§10</span>o projeto
+          <span class="note">Autoria, licença e como acompanhar.</span>
+        </div>
+        <div class="col">
+          <h2>Quem faz e sob quais termos</h2>
+          <p>Margem é desenvolvido por <b>Marlon Gomes da Costa</b> (MGC Dev), de forma independente. O autor é professor do IFMA — Campus São Raimundo das Mangabeiras, mas este é um projeto exclusivamente pessoal, sem vínculo, financiamento ou representação institucional.</p>
+          <p>Em desenvolvimento contínuo desde outubro de 2025, com registro público de mudanças a cada versão publicada.</p>
+
+          <div class="callout">
+            <p class="tag">Licença</p>
+            <p>O <b>código-fonte está disponível</b> para estudo, uso pessoal, familiar, educacional, acadêmico e avaliação técnica. Não é uma licença open source permissiva: uso comercial, redistribuição comercial, white-label, revenda e exploração econômica de derivados dependem de autorização prévia e por escrito do autor.</p>
+          </div>
+
+          <p>O app é gratuito e continua gratuito. Quem quiser apoiar encontra a opção de contribuição via PIX no rodapé do próprio app, com sistema de avaliações compartilhadas entre os usuários.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================ RODAPÉ ============================ -->
+  <footer class="foot">
+    <div class="sheet">
+      <div class="marg"><span class="num">§</span>abrir</div>
+      <div class="col">
+        <h2>Experimente agora</h2>
+        <p>Não precisa baixar, cadastrar nem configurar nada para começar. Abra e lance a primeira despesa.</p>
+        <a class="cta" href="./mgc-financas.html">Abrir o Margem</a>
+        <p><a href="https://github.com/Magoc25/mgc-financas" rel="noopener">Código-fonte no GitHub</a> · a documentação de privacidade, segurança, acessibilidade e licença é publicada junto ao código, e pode ser lida por qualquer pessoa.</p>
+        <p>© 2026 MGC Dev — Marlon Gomes da Costa · Projeto pessoal e independente<br>
+        Feito no Maranhão.</p>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var page = document.getElementById('page');
+    var botoes = document.querySelectorAll('[data-set-mode]');
+    botoes.forEach(function (b) {
+      b.addEventListener('click', function () {
+        page.dataset.mode = b.dataset.setMode;
+        botoes.forEach(function (x) {
+          x.setAttribute('aria-pressed', String(x === b));
+        });
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
