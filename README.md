@@ -213,23 +213,15 @@ Vá em **Settings → Data API**:
 3. Clique em **Salvar e conectar**
 4. Os dados são enviados imediatamente e sincronizados a cada salvamento
 
-#### Bloco extra — Evitar suspensão por inatividade (recomendado)
+#### E se eu ficar meses sem abrir o app?
 
-O Supabase pode suspender projetos gratuitos sem atividade por 7 dias consecutivos. Para evitar isso:
+O Supabase suspende projetos gratuitos depois de cerca de 7 dias **sem acesso ao serviço**. Não há nada para configurar — só vale saber o que acontece:
 
-1. Vá em **Database → Extensions** → busque `pg_cron` → ative o toggle
-2. No **SQL Editor**, rode uma vez:
+- **Usar o app mantém o projeto ativo.** Cada salvamento é um acesso; quem abre o Margem toda semana nunca esbarra nisso.
+- **Ficando muito tempo sem abrir, a sincronização para.** O app continua funcionando normalmente com os dados que estão no aparelho — o que pausa é a cópia na nuvem, não o app.
+- **Para voltar:** entre no painel do Supabase e clique em **Restore project**. Leva alguns minutos e **nada é apagado** — seus dados continuam lá.
 
-```sql
-SELECT cron.schedule(
-  'mgc-financas-keep-alive',
-  '0 8 * * *',
-  $$SELECT COUNT(*) FROM public.finance_data$$
-);
-```
-
-> Agenda uma consulta todos os dias às 5h Brasília — funciona de forma autônoma a partir daí.
-> Para confirmar que foi criado: `SELECT * FROM cron.job;`
+> **E aquela receita de agendar uma consulta automática (`pg_cron`) para "manter vivo"?** Ela circula bastante — inclusive esteve aqui neste README —, mas foi medida e **não funciona**: o agendamento roda *dentro* do banco, e o Supabase conta acesso ao **serviço**, não consulta interna. Um projeto com o agendamento rodando sem falhar toda semana foi suspenso do mesmo jeito. É passo inócuo; não gaste tempo com ele.
 
 ---
 

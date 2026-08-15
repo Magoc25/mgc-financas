@@ -731,6 +731,14 @@
 
           <p>Nenhum lançamento, valor, saldo, dívida, meta ou simulação é transmitido. Nada é vendido, cedido ou usado para publicidade.</p>
 
+          <h3>E o que o navegador busca fora</h3>
+          <p>Coletar é uma coisa; buscar arquivo de terceiro é outra, e ela também merece estar escrita. O app faz isso em dois momentos, e em nenhum deles o endereço pedido leva informação sua: as bibliotecas visuais, baixadas de uma rede pública de distribuição no primeiro acesso, e a imagem do QR de doação, pedida a um gerador externo — mas só se você abrir a tela de apoio, e o endereço dela carrega o código de pagamento fixo do desenvolvedor, o mesmo para todas as pessoas. Quem preferir não pedir imagem nenhuma tem, na mesma tela, o botão que copia o código de pagamento em texto: ele não contata ninguém.</p>
+
+          <div class="tech">
+            <p class="tag">Ficha técnica · o que sai pelo endereço</p>
+            <p>Auditar vazamento procurando chamadas de rede no código-fonte é metade da pergunta. O navegador busca a imagem de um endereço sem que nenhuma chamada apareça escrita em lugar nenhum — basta o endereço estar montado no atributo — e, quando isso acontece, o dado viaja dentro da própria URL, onde nenhuma busca por chamadas de rede o encontraria. A pergunta que fecha a auditoria é outra: <em>que endereços este app monta com dado de quem usa?</em> Aqui a resposta é nenhum — o único endereço montado em tempo de execução é o do QR, e o que entra nele é constante do próprio código, conferida contra o fonte e não contra a documentação.</p>
+          </div>
+
           <div class="tech">
             <p class="tag">Ficha técnica · LGPD</p>
             <p>O projeto opera como <b>ATPP</b> (Agente de Tratamento de Pequeno Porte, Resolução CD/ANPD nº 2/2022) e mantém documentação formal: aviso de privacidade, inventário de tratamento (Art. 37), política de segurança com plano de resposta a incidentes segundo a Resolução CD/ANPD nº 15/2024, e declaração de acessibilidade.</p>
@@ -738,12 +746,12 @@
               <table>
                 <thead><tr><th>Dado</th><th>Base legal</th><th>Operador</th></tr></thead>
                 <tbody>
-                  <tr><td><code>device_id</code> (UUID v4), versão, data</td><td>Legítimo interesse — Art. 7º, IX</td><td>Supabase Inc. (EUA, SCCs)</td></tr>
+                  <tr><td>Identificador aleatório de aparelho (UUID v4), versão, data</td><td>Legítimo interesse — Art. 7º, IX</td><td>Supabase Inc. (EUA, SCCs)</td></tr>
                   <tr><td>Nome, comentário e nota da avaliação</td><td>Consentimento — Art. 7º, I</td><td>Supabase Inc. (EUA, SCCs)</td></tr>
                 </tbody>
               </table>
             </div>
-            <p>O <code>device_id</code> é gerado com <code>crypto.randomUUID()</code> no próprio aparelho e guardado localmente — é pseudônimo não vinculável, sem chave de correlação com dado pessoal. Direitos do titular (LGPD Art. 18) são atendidos por e-mail em até 15 dias úteis.</p>
+            <p>O identificador é gerado com <code>crypto.randomUUID()</code> no próprio aparelho e guardado localmente — é pseudônimo não vinculável, sem chave de correlação com dado pessoal. Direitos do titular (LGPD Art. 18) são atendidos por e-mail em até 15 dias úteis.</p>
           </div>
         </div>
       </div>
