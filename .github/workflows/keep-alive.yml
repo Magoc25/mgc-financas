@@ -1,5 +1,10 @@
 name: Supabase Keep-Alive
 
+# São DOIS projetos Supabase (guia r86a): o COMPARTILHADO (reviews/pings/app_config) e o
+# PESSOAL (finance_data — os dados do app). Por muito tempo este workflow pingava só o
+# compartilhado, que não guarda dado nenhum, e o pessoal ficava sem defesa: o pg_cron que a
+# §15b sugeria foi medido e NÃO evita a suspensão (r88). Projeto pausado = sync morto, com o
+# sintoma mais enganoso possível ("parou de sincronizar depois da última sessão").
 on:
   schedule:
     - cron: '0 8 * * *'    # 05:00 Brasília
@@ -10,15 +15,45 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase reviews
+      # URL e chave só por env, nunca interpoladas na linha do curl (erro de shell vaza o
+      # comando inteiro); o log imprime apenas o código HTTP.
+      - name: Ping Supabase compartilhado (reviews/pings/versão)
+        env:
+          SB_URL: ${{ secrets.REV_SB_URL }}
+          SB_KEY: ${{ secrets.REV_SB_KEY }}
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${{ secrets.REV_SB_URL }}/rest/v1/app_reviews?select=id&limit=1" \
-            -H "apikey: ${{ secrets.REV_SB_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.REV_SB_KEY }}")
-          echo "Status HTTP: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "Aviso: resposta inesperada ($STATUS)"
+          if [ -z "$SB_URL" ] || [ -z "$SB_KEY" ]; then
+            echo "::error::Secrets REV_SB_URL / REV_SB_KEY ausentes — o Supabase COMPARTILHADO segue sem keep-alive."
             exit 1
           fi
-          echo "Supabase reviews ativo."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SB_URL/rest/v1/app_reviews?select=id&limit=1" \
+            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY")
+          echo "Status HTTP: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Compartilhado respondeu $STATUS (esperado 200)."
+            exit 1
+          fi
+          echo "Supabase compartilhado ativo."
+
+      # always(): se o passo acima falhar, este AINDA roda — projeto fora do ar não pode
+      # impedir o ping do outro, e é este que guarda os dados do usuário.
+      - name: Ping Supabase pessoal (dados do app — Camada 3)
+        if: always()
+        env:
+          SB_URL: ${{ secrets.OWN_SB_URL }}
+          SB_KEY: ${{ secrets.OWN_SB_KEY }}
+        run: |
+          if [ -z "$SB_URL" ] || [ -z "$SB_KEY" ]; then
+            echo "::error::Secrets OWN_SB_URL / OWN_SB_KEY ausentes — o Supabase PESSOAL segue sem keep-alive e pausa em ~7 dias sem uso."
+            exit 1
+          fi
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SB_URL/rest/v1/finance_data?select=id&limit=1" \
+            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY")
+          echo "Status HTTP: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Pessoal respondeu $STATUS — projeto pausado, chave trocada ou RLS alterada."
+            exit 1
+          fi
+          echo "Supabase pessoal ativo."
