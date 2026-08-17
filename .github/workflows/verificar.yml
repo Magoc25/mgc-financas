@@ -1,0 +1,47 @@
+name: Verificação (smoke §35)
+
+# Roda o smoke do §35 a cada push. Antes disto o arquivo de teste morava em `docs/`, que é
+# git-excluded, e as 230 asserções só existiam na máquina do desenvolvedor — inclusive as 9
+# da seção 0, que são o ÚNICO gate da `apresentacao.html` (nenhum passo do release toca essa
+# página: ela não é recompilada, não entra no fluxo de bump e ninguém a reabre). Teste que
+# depende de alguém lembrar de rodar é o "nada testa, nada avisa" com um degrau a mais (r100).
+#
+# SEM `paths:` de propósito (r82/r100): lista à mão apodrece calada, e a falha dela é
+# SILÊNCIO — o arquivo novo que ninguém acrescentou à lista simplesmente deixa de ser
+# verificado, com a suíte verde do último push dando a impressão contrária. O único filtro é
+# a NEGATIVA de `stats.json` (commit automático diário, r31), que não pode omitir nada novo.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'stats.json'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # O repositório NÃO pode ganhar package.json/node_modules (mora em pasta OneDrive —
+      # symlinks + massa de arquivos travam o sync inteiro, r33). O jsdom vive só no runner.
+      - name: Instalar jsdom (sem package.json no repo — r33/§35d)
+        run: npm install --no-save --no-package-lock jsdom
+
+      # jsdom ausente NÃO é "pulei": com CI=true (que o Actions define sozinho) o smoke falha
+      # de propósito. Teste que "passa" por não ter rodado é pior que teste vermelho — mesmo
+      # princípio do secret ausente no keep-alive (r86a).
+      #
+      # A seção 14 (convivência com o build anterior) aparece como "⚠ pulado": ela depende do
+      # `baseline.html`, que é derivado e git-excluded. É degrau LOCAL, rodado ao cortar
+      # release — o CI cobre as outras 27 seções.
+      - name: Smoke §35 (sync multi-device + as 3 regras invioláveis do §37)
+        run: node tests/smoke-sync.js mgc-financas.html
