@@ -14,6 +14,7 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-sed -i '' "s/const APP_VERSION    = '[^']*'/const APP_VERSION    = '$VERSION'/" "$HTML"
+# -i.bak funciona igual no macOS e no Git Bash; `-i ''` só existe no sed do macOS
+sed -i.bak "s/const APP_VERSION    = '[^']*'/const APP_VERSION    = '$VERSION'/" "$HTML" && rm -f "$HTML.bak"
 
 echo "Versão atualizada para $VERSION em $HTML"

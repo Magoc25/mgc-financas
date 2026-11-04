@@ -16,6 +16,9 @@
 //
 // Cobre o gate r68b: se uma coleção sincronizada nova nascer fora do merge,
 // _syncColecoesNaoRegistradas() deixa de ser [] e a seção 10 falha.
+//
+// Relógio injetável (r136b): SMOKE_AGORA=2027-01-31T12:00:00Z roda a suíte inteira como se fosse
+// aquela data. Asserção com mês escrito à mão quebra sozinha quando o calendário anda.
 const fs = require('fs');
 const path = require('path');
 // r57d — o MESMO arquivo roda SEM jsdom, fazendo só o degrau estático (a seção 0/§37 vem
@@ -24,6 +27,7 @@ const path = require('path');
 let JSDOM = null, VirtualConsole = null;
 try { ({ JSDOM, VirtualConsole } = require('jsdom')); } catch (e) {}
 
+process.on('unhandledRejection', e => { erros.push('rejeição no Node: ' + (e && e.message)); });
 const ARQ      = process.argv[2];
 const BASELINE = process.argv.includes('--baseline');
 let ok = 0, fail = 0;
@@ -36,7 +40,14 @@ const txt = (ap, id) => ler(ap, `(document.getElementById('${id}')||{}).textCont
 const secao  = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 58 - t.length)));
 
 // ─────────── "Supabase" compartilhado ───────────
-const nuvem = { payload: null, gets: 0, posts: 0 };
+// Fala PostgREST de verdade onde o app depende disso: `updated_at` volta no formato do servidor
+// (com +00:00, que precisa de encodeURIComponent na URL), PATCH filtrado devolve [] quando a linha
+// mudou, e a escrita copia o corpo (r85a). `pagina` conta só leitura que trouxe o blob inteiro.
+const nuvem = { payload: null, updated_at: null, gets: 0, checks: 0, posts: 0, patches: 0, conflitos: 0, get escritas() { return this.posts + this.patches; } };
+const clonar = o => JSON.parse(JSON.stringify(o));
+// Uma vez só: calculado por aparelho, cada um abriria com o relógio em SMOKE_AGORA e os abertos depois ficariam atrasados.
+const SMOKE_DESLOCAMENTO = process.env.SMOKE_AGORA ? Date.parse(process.env.SMOKE_AGORA) - Date.now() : 0;
+const zerarNuvem = () => { nuvem.payload = null; nuvem.updated_at = null; };
 const resposta = data => ({ ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) });
 
 const htmlBase = fs.readFileSync(ARQ, 'utf8').replace(/<script src="https:\/\/[^"]*"><\/script>/g, '');
@@ -48,12 +59,22 @@ function encadeavel() { // r57c — stub de API fluente (cliente de reviews) em 
 }
 
 async function abrirAparelho(nome, cfg = {}) {
-    const estado = { offline: false };
+    const estado = { offline: false, segurarEscrita: null, respostaLeitura: null, segurarLeitura: cfg.segurarLeitura || null, travarRede: false,
+                     skew: SMOKE_DESLOCAMENTO + (cfg.skew || 0) };
     const vc = new VirtualConsole();
     vc.on('jsdomError', e => { if (!/Not implemented|Could not parse CSS/.test(e.message)) erros.push(nome + ' · ' + e.message); });
     const dom = new JSDOM(cfg.html || htmlBase, {
         runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://localhost/', virtualConsole: vc,
         beforeParse(w) {
+            const R = w.Date;
+            w.Date = class extends R {
+                constructor(...a) { if (a.length) super(...a); else super(R.now() + estado.skew); }
+                static now() { return R.now() + estado.skew; }
+            };
+            // O tique de checagem periódica fica à mão: disparado pelo teste, não pelo acaso (senão
+            // um aparelho esquecido aberto entraria na cena do seguinte quando a suíte passasse de 1 min).
+            const siReal = w.setInterval.bind(w);
+            w.setInterval = (fn, ms, ...a) => { if (ms >= 30000) { (w.__tiques = w.__tiques || []).push(fn); return 0; } return siReal(fn, ms, ...a); };
             w.localStorage.setItem('finSupaUrl', 'https://fake.supabase.co');
             w.localStorage.setItem('finSupaKey', 'fake-key');
             if (cfg.localStorageInicial) w.localStorage.setItem('financeAppV6_Personalized', cfg.localStorageInicial);
@@ -72,14 +93,34 @@ async function abrirAparelho(nome, cfg = {}) {
             w.fetch = async (url, options = {}) => {
                 const u = String(url), metodo = (options.method || 'GET').toUpperCase();
                 if (estado.offline) throw new Error('offline');
-                if (/finance_data/.test(u) && metodo === 'POST') {
+                if (!/finance_data/.test(u)) return resposta([]);   // app_config, reviews, pings
+                if (estado.travarRede) await new Promise((_, rej) => { if (options.signal) options.signal.addEventListener('abort', () => rej(new Error('abortado'))); });
+                const q = new URL(u).searchParams;   // decodifica como o servidor: '+' cru na URL vira espaço
+                const rev = t => new Date(t).toISOString().replace('Z', '+00:00');
+                const aplicar = () => { const b = JSON.parse(options.body); nuvem.payload = clonar(b.payload); nuvem.updated_at = rev(b.updated_at); return resposta([{ updated_at: nuvem.updated_at }]); };
+                if (metodo === 'POST') {
+                    if (estado.segurarEscrita) await estado.segurarEscrita;
                     nuvem.posts++;
-                    nuvem.payload = JSON.parse(JSON.stringify(JSON.parse(options.body).payload));
-                    return resposta([]);
+                    return aplicar();
                 }
-                if (/finance_data.*select=payload/.test(u)) { nuvem.gets++; return resposta(nuvem.payload ? [{ payload: JSON.parse(JSON.stringify(nuvem.payload)) }] : []); }
-                if (/finance_data/.test(u)) return resposta([{ id: 1 }]);
-                return resposta([]);   // app_config, reviews, pings
+                if (metodo === 'PATCH') {
+                    if (estado.segurarEscrita) await estado.segurarEscrita;
+                    if (estado.sempreConflito) { nuvem.conflitos++; return resposta([]); }
+                    const f = q.get('updated_at');
+                    const casa = f === 'is.null' ? nuvem.updated_at == null : f === 'eq.' + nuvem.updated_at;
+                    if (!nuvem.payload || !casa) { nuvem.conflitos++; return resposta([]); }
+                    nuvem.patches++;
+                    return aplicar();
+                }
+                const sel = q.get('select') || '';
+                if (sel === 'updated_at') { nuvem.checks++; return resposta(nuvem.payload ? [{ updated_at: nuvem.updated_at }] : []); }
+                if (sel.includes('payload')) {
+                    nuvem.gets++;
+                    if (estado.segurarLeitura) await estado.segurarLeitura;
+                    if (estado.respostaLeitura) return estado.respostaLeitura();
+                    return resposta(nuvem.payload ? [{ payload: clonar(nuvem.payload), updated_at: nuvem.updated_at }] : []);
+                }
+                return resposta([{ id: 1 }]);
             };
         }
     });
@@ -89,7 +130,7 @@ async function abrirAparelho(nome, cfg = {}) {
         if (w.document.readyState === 'complete') { clearTimeout(t); res(); }
         else w.addEventListener('load', () => { clearTimeout(t); res(); });
     });
-    const ap = { nome, w, dom, estado };
+    const ap = { nome, w, dom, estado, skew: cfg.skew || 0 };
     await assentar(ap);
     return ap;
 }
@@ -97,7 +138,7 @@ async function abrirAparelho(nome, cfg = {}) {
 // espera a fila de sync do app esvaziar (cada ação = logHistorico + salvarDados → 2 sincronizações)
 async function assentar(ap) {
     for (let i = 0; i < 10; i++) {
-        try { await ler(ap, '_syncFila'); } catch (e) {}
+        try { await Promise.race([ler(ap, '_syncFila'), new Promise(r => setTimeout(r, 150))]); } catch (e) {}
         await new Promise(r => setTimeout(r, 5));
     }
 }
@@ -200,7 +241,7 @@ function secaoApresentacao() {
     // reprodução perfeita da perda de dado que ele existe para caçar — "não chamou o duplo"
     // e "chamou e perdeu tudo" dão exatamente o mesmo vermelho. Com esta linha o bypass vira
     // um ✗ localizado, no topo da suíte, que se lê em um segundo.
-    check('o duplo da nuvem foi exercitado (r91c) — leitura E escrita chegaram nele', nuvem.gets > 0 && nuvem.posts > 0, { gets: nuvem.gets, posts: nuvem.posts });
+    check('o duplo da nuvem foi exercitado (r91c) — leitura E escrita chegaram nele', nuvem.gets > 0 && nuvem.escritas > 0, { gets: nuvem.gets, escritas: nuvem.escritas });
     check('PC publicou os 2 lançamentos na nuvem', naNuvem('rendas').includes('Salário') && naNuvem('fixas').includes('Mercado'), { rendas: naNuvem('rendas'), fixas: naNuvem('fixas') });
 
     const B = await abrirAparelho('Celular');
@@ -381,7 +422,16 @@ function secaoApresentacao() {
         check('e devolve os ids/updatedAt intactos (campos desconhecidos sobrevivem)', naNuvemObj('fixas').every(x => x.id && typeof x.updatedAt === 'number'), naNuvemObj('fixas').map(x => x.id));
         const P = await abrirAparelho('PC-novo-depois');
         check('o aparelho novo volta a fundir por cima sem duplicar', ler(P, 'appData.fixas.length') === 3 && ler(P, 'new Set(appData.fixas.map(x=>String(x.id))).size') === 3, ler(P, 'appData.fixas.map(x=>x.name).join()'));
-        O.dom.window.close(); P.dom.window.close();
+        // A edição carimbada no aparelho novo tem de atravessar um aparelho ainda na versão anterior.
+        ler(P, "salvarLimite('Viagem', 321)"); await assentar(P);
+        const O2 = await abrirAparelho('Celular-versao-anterior', { html: antigoHtml, localStorageInicial: ler(O, "localStorage.getItem('financeAppV6_Personalized')") });
+        await assentar(O2);
+        check('a versão anterior recebe a edição carimbada', ler(O2, "appData.limites['Viagem']") === 321, ler(O2, "JSON.stringify(appData.limites)"));
+        ler(O2, "appData.fixas[0].amount = 1650; salvarDados();"); await assentar(O2);
+        const P2 = await abrirAparelho('PC-novo-depois-2', { localStorageInicial: ler(P, "localStorage.getItem('financeAppV6_Personalized')") });
+        check('a edição carimbada sobrevive à gravação da versão anterior', ler(P2, "appData.limites['Viagem']") === 321, ler(P2, "JSON.stringify(appData.limites)"));
+        check('e a edição feita na versão anterior chega ao aparelho novo', ler(P2, "appData.fixas[0].amount") === 1650, ler(P2, "appData.fixas[0].amount"));
+        [O, P, O2, P2].forEach(x => x.dom.window.close());
     }
 
     secao('15. Versão exibida vem da constante embutida (r38/r72a)');
@@ -604,7 +654,7 @@ function secaoApresentacao() {
     ler(L, "document.getElementById('addExpenseForm').dispatchEvent(new Event('submit'))"); await assentar(L);
     check('dia fora de 1..31 é recusado (nada gravado)', pegou32 && !ler(L, "appData.faturas.some(f=>f.name==='Dia impossível')"), { pegou32 });
     ler(L, "preencherDiaHoje()");
-    check('"hoje" preenche o dia de hoje', ler(L, "document.getElementById('newDia').value") === String(new Date().getDate()), ler(L, "document.getElementById('newDia').value"));
+    check('"hoje" preenche o dia de hoje', ler(L, "document.getElementById('newDia').value") === String(ler(L, 'new Date().getDate()')), ler(L, "document.getElementById('newDia').value"));
     ler(L, "document.getElementById('newType').value='Fixa'; toggleFormFields();");
     check('o campo Dia some para tipo que não é cartão', ler(L, "document.getElementById('divNewDia').style.display") === 'none');
     ler(L, `document.getElementById('newType').value=getCartoes()[0]; toggleFormFields();`);
@@ -774,7 +824,7 @@ function secaoApresentacao() {
     check('e o card de fixas também acompanha', fixasJul !== fixasAgo && fixasJul === 1500, { ago: fixasAgo, jul: fixasJul });
     check('no mês passado o rodapé do painel também bate com o card', card(X, 'valorRenda') === card(X, 'rendasTotal'));
     check('e o Saldo do mês passado fecha pelos cards', Math.abs(card(X, 'totalCardSaldo') - somaSaldo(X)) < 0.01, { saldo: card(X, 'totalCardSaldo'), contas: somaSaldo(X) });
-    check('o rótulo do rodapé diz de que mês é o total', /Jul\/\d\d/.test(String(ler(X, "(document.getElementById('rendasTotalLabel')||{}).textContent") || '')), ler(X, "(document.getElementById('rendasTotalLabel')||{}).textContent"));
+    check('o rótulo do rodapé diz de que mês é o total', String(ler(X, "(document.getElementById('rendasTotalLabel')||{}).textContent") || '').includes(mesAntX), { esperado: mesAntX, rotulo: ler(X, "(document.getElementById('rendasTotalLabel')||{}).textContent") });
     await verMes(X, mesAtualX);
     check('voltar para agosto restaura os valores de agosto', card(X, 'valorRenda') === rendaAgo && card(X, 'totalCardSaldo') === saldoAgo, { renda: card(X, 'valorRenda'), saldo: card(X, 'totalCardSaldo') });
 
@@ -906,6 +956,563 @@ function secaoApresentacao() {
     check('a dica de clique aparece no texto do gráfico', /Clique numa coluna/.test(htmlBase));
 
     [A, B, D, E, F, G, H, I, J, K, L, M, N, Q, R2, S, T, U, V, W, X, Y, Z].forEach(x => { try { x.dom.window.close(); } catch (e) {} });
+
+    // ───────────────────────────────────────────────────────────────────────────────
+    // O RELATO (v4.22.0): "alterei no Windows, sumiu no Mac; voltei ao Windows, sumiu também".
+    // O relógio do blob (_syncTs) dizia quem SINCRONIZOU por último, e era ele que decidia mapa e
+    // config: bastava outro aparelho abrir para o blob dele "ficar mais novo". A edição seguinte
+    // aqui perdia na fusão — sumia da memória, do disco e da nuvem, com a tela dizendo Sincronizado.
+    // ───────────────────────────────────────────────────────────────────────────────
+    const CHAVE_LS = 'financeAppV6_Personalized';
+    const dorme = ms => new Promise(r => setTimeout(r, ms));
+    const reabrir = async (ap, cfg = {}) => {
+        const ls = ap.w.localStorage.getItem(CHAVE_LS);
+        ap.dom.window.close();
+        return abrirAparelho(ap.nome, { skew: ap.skew, ...cfg, localStorageInicial: ls });
+    };
+    const abrirComSkew = (nome, skew) => abrirAparelho(nome, { skew });
+    const cenaComDados = async () => {
+        zerarNuvem();
+        const W = await abrirAparelho('Windows');
+        lancar(W, 'Fixa', 'Aluguel', 1000); await assentar(W);
+        lancar(W, 'Fixa', 'Luz', 100);      await assentar(W);
+        lancar(W, 'Renda', 'Salário', 5000); await assentar(W);
+        ler(W, "appData.faturas.push({card:'Credicard',name:'TV',category:'Outros',amount:100,curr:1,total:1,mesInicio:monthNames[HISTORY_COUNT]}); salvarDados();");
+        await assentar(W);
+        return W;
+    };
+    const voltarAoApp = async (ap, evento = 'visibilitychange') => {
+        ler(ap, '_syncUltChecagem = 0');
+        const alvo = evento === 'visibilitychange' ? ap.w.document : ap.w;
+        alvo.dispatchEvent(new ap.w.Event(evento));
+        await assentar(ap);
+    };
+
+    secao('29. O relato — editar num aparelho com outro aberto, em cada tipo de dado');
+    // r71b: um laço pelas variantes, não só a que apareceu no relato. Cada edição entra pela mesma
+    // função que o botão da tela chama; a coleção com carimbo por item é a referência (nunca perdeu).
+    const VARIANTES = [
+        { nome: 'pagamento de conta',    fazer: 'togglePagFixa(0)',                              ver: "(_getPag(_getMesPag()).fixas||[]).includes('Aluguel')", esp: true },
+        { nome: 'pagamento de cartão',   fazer: "togglePagCartao('Credicard')",                  ver: "(_getPag(_getMesPag()).cartoes||[]).includes('Credicard')", esp: true },
+        { nome: 'limite de categoria',   prep: "salvarLimite('Viagem', 100)", fazer: "salvarLimite('Viagem', 999)", ver: "appData.limites['Viagem']", esp: 999 },
+        { nome: 'trazer déficit',        prep: "planToggleCarry(monthNames[HISTORY_COUNT+1])", fazer: "planToggleCarry(monthNames[HISTORY_COUNT+1])", ver: "!!appData.carryForward[monthNames[HISTORY_COUNT+1]]", esp: false },
+        { nome: 'economia mensal',       fazer: 'planSetEconomia(777, true)',                    ver: 'appData.planejamento.economia', esp: 777 },
+        { nome: 'dívida adicional',      fazer: 'planSetDividaAdicional(555)',                   ver: 'appData.planejamento.dividaAdicional', esp: 555 },
+        { nome: 'dívida automática',     fazer: 'planSetDividaAuto(false)',                      ver: 'appData.planejamento.dividaAuto', esp: false },
+        { nome: 'taxa CDI',              fazer: "document.getElementById('invCfgCdi').value='12.34'; document.getElementById('invCfgCdi').dispatchEvent(new Event('input'))", ver: 'Math.round(appData.investimentos.config.cdiAnual*10000)', esp: 1234 },
+        { nome: 'valor de despesa fixa', fazer: "appData.fixas[0]={...appData.fixas[0],amount:1234}; salvarDados()", ver: "appData.fixas.find(f=>f.name==='Aluguel').amount", esp: 1234 },
+        { nome: 'compra no cartão',      fazer: "appData.faturas[0]={...appData.faturas[0],amount:88}; salvarDados()", ver: "appData.faturas.find(f=>f.name==='TV').amount", esp: 88 },
+    ];
+    for (const v of VARIANTES) {
+        let W = await cenaComDados();
+        if (v.prep) { ler(W, v.prep); await assentar(W); }
+        await dorme(3);
+        let M = await abrirAparelho('Mac');           // o Mac abre e fica aberto; não edita nada
+        await dorme(3);
+        ler(W, v.fazer); await assentar(W);           // o Windows, aberto desde antes, edita
+        const logoApos = ler(W, v.ver);
+        const lidoNaNuvem = await (async () => { const N = await abrirAparelho('Nuvem-sonda'); const r = ler(N, v.ver); N.dom.window.close(); return r; })();
+        M = await reabrir(M); const noMac = ler(M, v.ver);
+        W = await reabrir(W); const noWin = ler(W, v.ver);
+        check(`${v.nome} — não some logo após salvar`, logoApos === v.esp, logoApos);
+        check(`${v.nome} — chega na nuvem`, lidoNaNuvem === v.esp, lidoNaNuvem);
+        check(`${v.nome} — aparece no outro aparelho`, noMac === v.esp, noMac);
+        check(`${v.nome} — continua aqui ao reabrir`, noWin === v.esp, noWin);
+        W.dom.window.close(); M.dom.window.close();
+    }
+    // Segunda camada: o outro aparelho não só abre, ele EDITA outra coisa (e aí grava de verdade).
+    // "Abrir não grava" não cobre este caso; quem protege aqui é o carimbo por célula.
+    for (const v of VARIANTES) {
+        let W = await cenaComDados();
+        if (v.prep) { ler(W, v.prep); await assentar(W); }
+        await dorme(3);
+        const M = await abrirAparelho('Mac');
+        lancar(M, 'Renda', 'OutraCoisaDoMac', 5); await assentar(M);
+        await dorme(3);
+        ler(W, v.fazer); await assentar(W);
+        check(`${v.nome} — com o outro aparelho gravando no meio: não some`, ler(W, v.ver) === v.esp, ler(W, v.ver));
+        W = await reabrir(W);
+        check(`${v.nome} — com o outro aparelho gravando no meio: continua ao reabrir`, ler(W, v.ver) === v.esp, ler(W, v.ver));
+        check(`${v.nome} — e a edição do outro aparelho também fica`, ler(W, "appData.rendas.some(r=>r.name==='OutraCoisaDoMac')") === true);
+        W.dom.window.close(); M.dom.window.close();
+    }
+    {   // fechou a janela antes do envio terminar: fica no aparelho, sobe na volta, e o outro não apaga
+        for (const v of VARIANTES.filter(x => ['pagamento de conta', 'economia mensal', 'taxa CDI'].includes(x.nome))) {
+            let W = await cenaComDados();
+            W = await reabrir(W);
+            W.estado.offline = true;
+            ler(W, v.fazer); await assentar(W);
+            let M = await abrirAparelho('Mac');
+            await dorme(3);
+            W = await reabrir(W);
+            check(`${v.nome} — sem rede ao salvar: sobrevive ao outro aparelho abrir no meio`, ler(W, v.ver) === v.esp, ler(W, v.ver));
+            M = await reabrir(M);
+            check(`${v.nome} — e chega no outro quando este volta`, ler(M, v.ver) === v.esp, ler(M, v.ver));
+            W.dom.window.close(); M.dom.window.close();
+        }
+    }
+    {   // célula, não blob: dois campos/contas diferentes editados em lados diferentes se somam
+        let W = await cenaComDados();
+        let M = await abrirAparelho('Mac');
+        ler(M, 'togglePagFixa(0)'); ler(M, 'planSetEconomia(111, true)'); await assentar(M);
+        await dorme(3);
+        ler(W, 'togglePagFixa(1)'); ler(W, 'planSetDividaAdicional(222)'); await assentar(W);
+        M = await reabrir(M); W = await reabrir(W);
+        const pagas = String(ler(W, "(_getPag(_getMesPag()).fixas||[]).slice().sort().join()"));
+        check('contas diferentes do MESMO mês, marcadas em aparelhos diferentes, ficam as duas', pagas === 'Aluguel,Luz', pagas);
+        check('campos diferentes da mesma config se somam (economia do Mac + dívida do Windows)', ler(W, 'appData.planejamento.economia') === 111 && ler(W, 'appData.planejamento.dividaAdicional') === 222, ler(W, 'JSON.stringify(appData.planejamento)'));
+        check('o outro aparelho converge para o mesmo', ler(M, "(_getPag(_getMesPag()).fixas||[]).length") === 2 && ler(M, 'appData.planejamento.dividaAdicional') === 222, ler(M, 'JSON.stringify(appData.planejamento)'));
+        // os dois sentidos: desmarcar também propaga (é o que a união sozinha não faz, r104e)
+        ler(M, 'togglePagFixa(0)'); await assentar(M);
+        await dorme(3);
+        W = await reabrir(W);
+        check('desmarcar num aparelho desmarca no outro', ler(W, "(_getPag(_getMesPag()).fixas||[]).join()") === 'Luz', ler(W, "JSON.stringify(_getPag(_getMesPag()))"));
+        W.dom.window.close(); M.dom.window.close();
+    }
+
+    secao('30. Abrir o app não é editar — sem escrita à toa nem pingue-pongue');
+    {
+        const W = await cenaComDados();
+        const e0 = nuvem.escritas, rev0 = nuvem.updated_at;
+        const M = await abrirAparelho('Mac');
+        check('abrir num aparelho em dia não grava na nuvem', nuvem.escritas === e0 && nuvem.updated_at === rev0, { escritas: nuvem.escritas - e0 });
+        check('e o carimbo do blob não muda (era o que fazia a edição do outro lado perder)', (nuvem.payload._syncTs || 0) === ler(W, 'appData._syncTs'), { nuvem: nuvem.payload._syncTs, win: ler(W, 'appData._syncTs') });
+        await voltarAoApp(M);
+        check('voltar ao app sem novidade também não grava', nuvem.escritas === e0, nuvem.escritas - e0);
+        // cada aparelho acrescenta um item diferente: as ordens ficam diferentes para sempre.
+        // Ordem não é dado aqui, então isso não pode virar regravação eterna (r135b).
+        W.estado.offline = true; M.estado.offline = true;
+        ler(W, "appData.rendas.push({name:'SoWin',amount:1}); salvarDados();"); await assentar(W);
+        ler(M, "appData.rendas.push({name:'SoMac',amount:2}); salvarDados();"); await assentar(M);
+        W.estado.offline = false; M.estado.offline = false;
+        await voltarAoApp(W); await voltarAoApp(M); await voltarAoApp(W); await voltarAoApp(M);
+        check('os dois convergem no mesmo conjunto', ler(W, "appData.rendas.map(r=>r.name).sort().join()") === ler(M, "appData.rendas.map(r=>r.name).sort().join()") && ler(M, "appData.rendas.some(r=>r.name==='SoWin')"), { w: ler(W, "appData.rendas.map(r=>r.name).join()"), m: ler(M, "appData.rendas.map(r=>r.name).join()") });
+        const e1 = nuvem.escritas;
+        for (let i = 0; i < 4; i++) { await voltarAoApp(W); await voltarAoApp(M); }
+        check('e depois de convergir NINGUÉM regrava (ordem diferente não é mudança)', nuvem.escritas === e1, nuvem.escritas - e1);
+        // mais de 200 sugestões de descrição: o recorte tem de ser o mesmo nos dois lados
+        ler(W, "appData.descricoes = Array.from({length:200},(_,i)=>'w'+i); salvarDados();"); await assentar(W);
+        ler(M, "appData.descricoes = Array.from({length:200},(_,i)=>'m'+i); salvarDados();"); await assentar(M);
+        await voltarAoApp(W); await voltarAoApp(M);
+        const e2 = nuvem.escritas;
+        for (let i = 0; i < 3; i++) { await voltarAoApp(W); await voltarAoApp(M); }
+        check('sugestões acima do limite também não viram regravação eterna', nuvem.escritas === e2, nuvem.escritas - e2);
+        check('e o limite de sugestões continua valendo', ler(W, 'appData.descricoes.length') <= 200, ler(W, 'appData.descricoes.length'));
+        W.dom.window.close(); M.dom.window.close();
+    }
+
+    secao('31. Relógios fora de sincronia — quem edita depois de ver, vence');
+    {   // a prova de capacidade do arreio vem primeiro (r117): o Mac tem de estar MESMO adiantado
+        let W = await cenaComDados();
+        let M = await abrirComSkew('Mac-adiantado', 3 * 60 * 1000);
+        const d = ler(M, 'Date.now()') - ler(W, 'Date.now()');
+        check('o arreio consegue adiantar o relógio de um aparelho', d > 170000, d);
+        ler(M, "appData.fixas[0]={...appData.fixas[0],amount:1111}; salvarDados()"); await assentar(M);
+        await voltarAoApp(W);
+        check('o outro aparelho viu a edição do relógio adiantado', ler(W, 'appData.fixas[0].amount') === 1111, ler(W, 'appData.fixas[0].amount'));
+        ler(W, "appData.fixas[0]={...appData.fixas[0],amount:2222}; salvarDados()"); await assentar(W);
+        check('quem viu e editou depois vence, mesmo com o relógio atrasado', ler(W, 'appData.fixas[0].amount') === 2222, ler(W, 'appData.fixas[0].amount'));
+        M = await reabrir(M);
+        check('e a edição chega ao aparelho adiantado', ler(M, 'appData.fixas[0].amount') === 2222, ler(M, 'appData.fixas[0].amount'));
+        // o mesmo para célula
+        ler(M, "salvarLimite('Viagem', 50)"); await assentar(M);
+        await voltarAoApp(W);
+        ler(W, "salvarLimite('Viagem', 60)"); await assentar(W);
+        M = await reabrir(M);
+        check('vale também para limite/taxa/pagamento', ler(M, "appData.limites['Viagem']") === 60, ler(M, "appData.limites['Viagem']"));
+        // e para exclusão: apagar o que se acabou de ver, com relógio atrasado, apaga mesmo
+        const idApagar = ler(W, "appData.fixas[1].id");
+        ler(M, "appData.fixas[1]={...appData.fixas[1],amount:7}; salvarDados()"); await assentar(M);
+        await voltarAoApp(W);
+        ler(W, "_removerItemDireto('fixa', 1)"); await assentar(W);
+        M = await reabrir(M);
+        check('apagar o item que veio do relógio adiantado propaga (o tombstone não perde)', !ler(M, `appData.fixas.some(f=>String(f.id)==='${idApagar}')`), ler(M, 'appData.fixas.map(f=>f.name).join()'));
+        W.dom.window.close(); M.dom.window.close();
+    }
+
+    secao('32. Corrida — dois aparelhos gravando ao mesmo tempo');
+    {
+        const W = await cenaComDados();
+        const M = await abrirAparelho('Mac');
+        let solta; M.estado.segurarEscrita = new Promise(r => { solta = r; });
+        ler(M, "appData.rendas.push({name:'DoMac',amount:1}); salvarDados();");   // o Mac leu a nuvem e parou antes de gravar
+        await dorme(20);
+        ler(W, "appData.rendas.push({name:'DoWindows',amount:2}); salvarDados();"); await assentar(W);
+        check('o Windows gravou enquanto o Mac estava no meio', naNuvem('rendas').includes('DoWindows'), naNuvem('rendas'));
+        const c0 = nuvem.conflitos;
+        M.estado.segurarEscrita = null; solta(); await dorme(20); await assentar(M);
+        check('a escrita atrasada do Mac foi recusada, não sobrescreveu', nuvem.conflitos > c0, { conflitos: nuvem.conflitos - c0 });
+        check('ela releu, fundiu e os DOIS ficaram na nuvem', naNuvem('rendas').includes('DoWindows') && naNuvem('rendas').includes('DoMac'), naNuvem('rendas'));
+        check('e o Mac terminou com os dois', ler(M, "appData.rendas.some(r=>r.name==='DoWindows')") === true, ler(M, "appData.rendas.map(r=>r.name).join()"));
+        // conflito eterno: desiste sem perder nada e tenta de novo depois
+        M.estado.sempreConflito = true;
+        ler(M, "appData.rendas.push({name:'Insistente',amount:3}); salvarDados();"); await assentar(M); await dorme(20); await assentar(M);
+        check('conflito sem fim não trava nem finge sucesso', !naNuvem('rendas').includes('Insistente') && txt(M, 'headerSupaText') === 'Falha ao salvar', { nuvem: naNuvem('rendas'), status: txt(M, 'headerSupaText') });
+        check('o dado segue salvo no aparelho', JSON.parse(ler(M, `localStorage.getItem('${CHAVE_LS}')`)).rendas.some(r => r.name === 'Insistente'));
+        M.estado.sempreConflito = false;
+        await voltarAoApp(M);
+        check('e sobe na próxima oportunidade, sem ação do usuário', naNuvem('rendas').includes('Insistente'), naNuvem('rendas'));
+        W.dom.window.close(); M.dom.window.close();
+    }
+
+    secao('33. Voltar à janela aberta — a tela acompanha a nuvem');
+    {
+        const W = await cenaComDados();
+        const M = await abrirAparelho('Mac');
+        const telaFixas = ap => String(ler(ap, "document.getElementById('fixedExpensesBody').textContent") || '');
+        for (const [evento, nomeItem] of [['visibilitychange', 'NovaA'], ['focus', 'NovaB'], ['online', 'NovaC']]) {
+            lancar(W, 'Fixa', nomeItem, 10); await assentar(W);
+            check(`(${evento}) antes de voltar, a janela parada não sabe do item`, !telaFixas(M).includes(nomeItem));
+            await voltarAoApp(M, evento);
+            check(`(${evento}) ao voltar, o item aparece NA TELA, sem recarregar`, telaFixas(M).includes(nomeItem), telaFixas(M).slice(0, 80));
+        }
+        lancar(W, 'Fixa', 'NovaTique', 10); await assentar(W);
+        check('o tique periódico está registrado', (ler(M, '(window.__tiques||[]).length') || 0) > 0, ler(M, '(window.__tiques||[]).length'));
+        ler(M, '_syncUltChecagem = 0; window.__tiques[0]()'); await assentar(M);
+        check('e também traz a novidade', telaFixas(M).includes('NovaTique'));
+        // o caso comum tem de ser barato: sem novidade, nem o blob desce
+        const g0 = nuvem.gets, c0 = nuvem.checks;
+        await voltarAoApp(M);
+        check('sem novidade só lê o carimbo da linha, nunca o blob inteiro', nuvem.gets === g0 && nuvem.checks === c0 + 1, { blobs: nuvem.gets - g0, checagens: nuvem.checks - c0 });
+        // aba escondida não fica consultando
+        Object.defineProperty(M.w.document, 'hidden', { value: true, configurable: true });
+        const c1 = nuvem.checks;
+        await voltarAoApp(M); ler(M, '_syncUltChecagem = 0; window.__tiques[0]()'); await assentar(M);
+        check('aba escondida não consulta a nuvem', nuvem.checks === c1, nuvem.checks - c1);
+        Object.defineProperty(M.w.document, 'hidden', { value: false, configurable: true });
+        // a novidade que chega DURANTE um save também aparece (antes só o boot redesenhava)
+        lancar(W, 'Fixa', 'NovaNoSave', 10); await assentar(W);
+        lancar(M, 'Renda', 'QualquerCoisa', 1); await assentar(M);
+        check('novidade que veio junto com um save aparece na tela', telaFixas(M).includes('NovaNoSave'), telaFixas(M).slice(0, 80));
+        // erro e volta: o selo da conexão não fica mentindo
+        M.estado.offline = true;
+        await voltarAoApp(M);
+        check('sem rede, o selo diz "Sem conexão"', txt(M, 'headerSupaText') === 'Sem conexão', txt(M, 'headerSupaText'));
+        M.estado.offline = false;
+        await voltarAoApp(M, 'online');
+        check('com a rede de volta, o selo volta a "Sincronizado"', txt(M, 'headerSupaText') === 'Sincronizado', txt(M, 'headerSupaText'));
+        // outra janela do MESMO navegador: mesma memória de disco, duas cópias em RAM
+        ler(W, "appData.rendas.push({name:'DaOutraJanela',amount:9});");
+        const blob = ler(W, "(_syncCarimbar(), JSON.stringify(appData))");
+        M.w.dispatchEvent(new M.w.StorageEvent('storage', { key: CHAVE_LS, newValue: blob }));
+        await assentar(M);
+        check('alteração salva por outra janela do navegador entra nesta (e não é sobrescrita depois)', ler(M, "appData.rendas.some(r=>r.name==='DaOutraJanela')") === true);
+        await voltarAoApp(M);
+        check('e sobe para a nuvem mesmo se a outra janela fechou sem enviar', naNuvem('rendas').includes('DaOutraJanela'), naNuvem('rendas'));
+        ler(M, "salvarDados()"); await assentar(M);
+        check('e o próximo save desta janela a preserva no disco', JSON.parse(ler(M, `localStorage.getItem('${CHAVE_LS}')`)).rendas.some(r => r.name === 'DaOutraJanela'));
+        W.dom.window.close(); M.dom.window.close();
+    }
+
+    secao('34. Tela aberta enquanto a nuvem funde — vale o item, não a posição');
+    {   // modal de edição: o item acima dele some pela fusão → a posição aponta para outro
+        let W = await cenaComDados();
+        lancar(W, 'Fixa', 'Água', 50); await assentar(W);
+        lancar(W, 'Fixa', 'Internet', 60); await assentar(W);
+        let M = await abrirAparelho('Mac');
+        const iAgua = ler(W, "appData.fixas.findIndex(f=>f.name==='Água')");
+        ler(W, `editarItem('fixa', ${iAgua})`);
+        ler(M, "appData.fixas.splice(0,1); salvarDados();"); await assentar(M);       // o Mac apaga o 1º
+        await voltarAoApp(W);                                                          // a fusão acontece com o modal aberto
+        W.w.document.getElementById('editVigDaqui').checked = false;
+        W.w.document.getElementById('editValor').value = '77';
+        ler(W, "document.getElementById('editSaveBtn').click()"); await assentar(W);
+        const valores = () => ler(W, "appData.fixas.map(f=>f.name+':'+f.amount).join()");
+        check('salvar o modal aberto edita O ITEM que estava aberto', /Água:77/.test(valores()), valores());
+        check('e não toca em nenhum outro', /Internet:60/.test(valores()) && /Luz:100/.test(valores()), valores());
+        // o item do modal foi apagado no outro aparelho
+        const iLuz = ler(W, "appData.fixas.findIndex(f=>f.name==='Luz')");
+        ler(W, `editarItem('fixa', ${iLuz})`);
+        M = await reabrir(M);
+        ler(M, "appData.fixas.splice(appData.fixas.findIndex(f=>f.name==='Luz'),1); salvarDados();"); await assentar(M);
+        await voltarAoApp(W);
+        const antes = valores();
+        W.w.document.getElementById('editValor').value = '999';
+        ler(W, "document.getElementById('editSaveBtn').click()"); await assentar(W);
+        check('item apagado no outro aparelho: o save avisa e não escreve em ninguém', valores() === antes, { antes, depois: valores() });
+        check('o modal fecha para não ficar editando o nada', ler(W, "document.getElementById('editModal').classList.contains('hidden')") === true);
+        W.dom.window.close(); M.dom.window.close();
+
+        // "Encerrar": a confirmação fica aberta durante a fusão (referência órfã)
+        W = await cenaComDados();
+        ler(W, "appData.fixas[0]={...appData.fixas[0],inicio:monthNames[0]}; salvarDados();"); await assentar(W);
+        const fetchReal = W.w.fetch; let soltaLeitura; const porta = new Promise(r => { soltaLeitura = r; });
+        W.w.fetch = async (u, o) => { if (/select=payload/.test(String(u))) await porta; return fetchReal(u, o); };
+        ler(W, 'salvarDados()');                       // sincronização em andamento…
+        ler(W, "removerItem('fixa', 0)");              // …o usuário abre a confirmação…
+        soltaLeitura(); await dorme(10); await assentar(W);   // …a fusão termina e troca o appData…
+        ler(W, "document.getElementById('confirmOkBtn').click()"); await assentar(W);   // …e ele confirma.
+        check('"Encerrar" confirmado depois da fusão encerra de verdade', !!ler(W, 'appData.fixas[0].fim'), ler(W, 'JSON.stringify(appData.fixas[0])'));
+        check('e a nuvem recebe (não só o histórico)', !!(naNuvemObj('fixas')[0] || {}).fim, naNuvemObj('fixas')[0]);
+        W.dom.window.close();
+
+        // modal de edição aberto: a tela se atualiza por baixo e a categoria escolhida não pode mudar
+        W = await cenaComDados();
+        M = await abrirAparelho('Mac');
+        ler(W, "appData.faturas[0]={...appData.faturas[0],category:'Viagem'}; salvarDados();"); await assentar(W);
+        ler(W, "editarItem('fatura', 0)");
+        check('(o modal abre com a categoria do lançamento)', ler(W, "document.getElementById('editCategoria').value") === 'Viagem', ler(W, "document.getElementById('editCategoria').value"));
+        ler(M, "appData.categorias.push('Pets'); salvarDados();"); await assentar(M);
+        await voltarAoApp(W);
+        check('a categoria nova do outro aparelho entra na lista do modal aberto', ler(W, "[...document.getElementById('editCategoria').options].some(o=>o.value==='Pets')") === true);
+        check('modal de edição mantém a categoria escolhida quando a tela se atualiza', ler(W, "document.getElementById('editCategoria').value") === 'Viagem', ler(W, "document.getElementById('editCategoria').value"));
+        ler(W, "document.getElementById('editSaveBtn').click()"); await assentar(W);
+        check('e salvar não troca a categoria sem ninguém pedir', ler(W, "appData.faturas[0].category") === 'Viagem', ler(W, "appData.faturas[0].category"));
+        W.dom.window.close(); M.dom.window.close();
+
+        // modal de preencher datas aberto: o índice da fatura muda com a fusão
+        W = await cenaComDados();
+        M = await abrirAparelho('Mac');
+        ler(W, "appData.faturas.push({card:'Credicard',name:'Sofá',category:'Outros',amount:300,curr:1,total:1,mesInicio:monthNames[HISTORY_COUNT]}); salvarDados();"); await assentar(W);
+        M = await reabrir(M);
+        ler(W, 'abrirDatasModal()');
+        ler(M, "appData.faturas.splice(appData.faturas.findIndex(f=>f.name==='TV'),1); salvarDados();"); await assentar(M);
+        await voltarAoApp(W);
+        ler(W, `(function(){const c=[...document.querySelectorAll('#datasLista .datas-dia')].find(e=>e.parentNode.textContent.includes('Sofá')); if(c) c.value='15';})()`);
+        ler(W, 'salvarDatas()'); await assentar(W);
+        check('o dia preenchido com o modal aberto vai para a compra certa', ler(W, "appData.faturas.find(f=>f.name==='Sofá').dia") === 15, ler(W, "JSON.stringify(appData.faturas)"));
+        W.dom.window.close(); M.dom.window.close();
+    }
+
+    secao('35. Leitura ruim nunca vira escrita');
+    {
+        const W = await cenaComDados();
+        const eBase = nuvem.escritas, cBase = clonar(nuvem.payload);
+        const ruins = {
+            'erro 500 do servidor':   async () => ({ ok: false, status: 500, json: async () => ({}), text: async () => 'erro' }),
+            'JSON truncado':          async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('truncado'); }, text: async () => '' }),
+            'resposta que não é lista': async () => resposta({ message: 'qualquer coisa' }),
+            'payload que não é objeto': async () => resposta([{ payload: 'texto', updated_at: nuvem.updated_at }]),
+        };
+        for (const [nome, r] of Object.entries(ruins)) {
+            W.estado.respostaLeitura = r;
+            ler(W, "appData.rendas.push({name:'X" + nome.length + "',amount:1}); salvarDados();"); await assentar(W);
+            check(`${nome}: não grava por cima da nuvem`, nuvem.escritas === eBase, nuvem.escritas - eBase);
+            check(`${nome}: o selo acusa`, /Sem conexão|ilegível/.test(String(txt(W, 'headerSupaText'))), txt(W, 'headerSupaText'));
+        }
+        W.estado.respostaLeitura = null;
+        check('a nuvem ficou exatamente como estava', JSON.stringify(nuvem.payload) === JSON.stringify(cBase));
+        await voltarAoApp(W);
+        check('com a leitura de volta, o que ficou pendente sobe', naNuvem('rendas').filter(n => /^X\d+$/.test(n)).length === Object.keys(ruins).length, naNuvem('rendas'));
+        W.dom.window.close();
+    }
+
+    secao('36. Service worker — resposta da nuvem nunca sai do cache');
+    {   // Roda o sw.js de verdade num vm, com caches/fetch falsos: é comportamento, não texto (r78c).
+        const vm = require('vm');
+        const swPath = path.join(path.dirname(ARQ) || '.', 'sw.js');
+        const swSrc = fs.existsSync(swPath) ? fs.readFileSync(swPath, 'utf8') : '';
+        check('sw.js encontrado ao lado do app', !!swSrc);
+        const ouvintes = {};
+        const armazem = new Map();
+        let redeFora = false, proximaResposta = null;
+        const respostaBoa = () => ({ ok: true, type: 'basic', status: 200, clone() { return this; }, marca: 'rede' });
+        const sb = {
+            self: null, URL, Promise, console,
+            addEventListener: (t, f) => { ouvintes[t] = f; },
+            location: { origin: 'https://magoc25.github.io' },
+            caches: {
+                open: async () => ({ put: async (r, v) => { armazem.set(r.url, v); }, addAll: async () => {} }),
+                match: async r => armazem.get(r.url), keys: async () => [], delete: async () => true,
+            },
+            clients: { claim: async () => {} },
+            fetch: async () => { if (redeFora) throw new TypeError('offline'); return proximaResposta || respostaBoa(); },
+        };
+        sb.self = sb;
+        vm.createContext(sb);
+        try { vm.runInContext(swSrc, sb); } catch (e) { check('sw.js executa', false, e.message); }
+        const buscar = async url => {
+            let resp = null, interceptou = false;
+            ouvintes.fetch({ request: { method: 'GET', url }, respondWith: p => { interceptou = true; resp = p; } });
+            return { interceptou, resp: interceptou ? await resp : undefined };
+        };
+        const urlNuvem = 'https://abc.supabase.co/rest/v1/finance_data?id=eq.1&select=payload,updated_at';
+        const r1 = await buscar(urlNuvem);
+        check('GET da nuvem passa direto pelo service worker', r1.interceptou === false, r1.interceptou);
+        check('e não deixa cópia no cache', !armazem.has(urlNuvem), [...armazem.keys()]);
+        redeFora = true;
+        const r2 = await buscar(urlNuvem);
+        check('sem rede, NÃO devolve payload antigo como se a nuvem tivesse respondido', r2.interceptou === false && r2.resp === undefined, r2);
+        redeFora = false;
+        const r3 = await buscar('https://magoc25.github.io/mgc-financas/mgc-financas.html');
+        check('o próprio app continua indo pela rede e guardando cópia', r3.interceptou === true && armazem.has('https://magoc25.github.io/mgc-financas/mgc-financas.html'));
+        const r4 = await buscar('https://cdn.jsdelivr.net/npm/chart.js');
+        check('as bibliotecas de CDN continuam disponíveis offline', r4.interceptou === true && armazem.has('https://cdn.jsdelivr.net/npm/chart.js'));
+        const r5 = await buscar('https://api.qrserver.com/v1/create-qr-code/?data=x');
+        check('host desconhecido fica de fora por padrão (lista de permissão)', r5.interceptou === false);
+        redeFora = true;
+        const r6 = await buscar('https://magoc25.github.io/mgc-financas/mgc-financas.html');
+        check('offline, o app abre da cópia guardada', r6.interceptou === true && r6.resp && r6.resp.marca === 'rede', r6.resp);
+        redeFora = false;
+        proximaResposta = { ok: false, type: 'basic', status: 503, clone() { return this; }, marca: 'erro503' };
+        await buscar('https://magoc25.github.io/mgc-financas/mgc-financas.html');
+        proximaResposta = null;
+        check('erro do servidor não apaga a cópia boa do modo offline', (armazem.get('https://magoc25.github.io/mgc-financas/mgc-financas.html') || {}).marca === 'rede');
+    }
+
+    secao('37. Auditoria — o resto do que a tela dizia ou gravava errado');
+    {
+        const W = await cenaComDados();
+        // ── pagamentos respeita vigência (v4.18.0) ──
+        const mesHojeA = ler(W, 'monthNames[HISTORY_COUNT]'), mesAntesA = ler(W, 'monthNames[HISTORY_COUNT-1]');
+        ler(W, `appData.fixas.push({name:'Academia',amount:90,inicio:monthNames[0],fim:'${mesAntesA}'}); appData.fixas.push({name:'Futura',amount:70,inicio:monthNames[HISTORY_COUNT+1]}); salvarDados();`);
+        await assentar(W);
+        ler(W, 'processarDadosERenderizar()');
+        const listaPag = () => String(ler(W, "document.getElementById('pagFixasList').textContent") || '');
+        check('despesa encerrada não aparece nos pagamentos do mês', listaPag().includes('Aluguel') && !listaPag().includes('Academia'), listaPag().slice(0, 100));
+        check('despesa que ainda não começou também não', listaPag().includes('Aluguel') && !listaPag().includes('Futura'), listaPag().slice(0, 100));
+        const quitado = () => String(ler(W, "document.getElementById('pagProgressText').textContent") || '');
+        check('e o total a quitar não soma o que não vale no mês (1000 + 100 + fatura 100)', /1\.200,00/.test(quitado()), quitado());
+        check('clicar marca a conta certa, mesmo com outras escondidas', (ler(W, "document.querySelectorAll('#pagFixasList .pag-item')[1].click()"), ler(W, "_getPag(_getMesPag()).fixas.join()")) === 'Luz', ler(W, "_getPag(_getMesPag()).fixas.join()"));
+        await assentar(W);
+        // ── render não escreve ──
+        const mesVazio = ler(W, 'monthNames[HISTORY_COUNT+5]');
+        const fFiltro = W.w.document.getElementById('filterMonth'); fFiltro.value = mesVazio; fFiltro.dispatchEvent(new W.w.Event('change'));
+        check('desenhar um mês não cria registro de pagamento vazio', ler(W, `'${mesVazio}' in appData.pagamentos`) === false, ler(W, 'Object.keys(appData.pagamentos).join()'));
+        fFiltro.value = mesHojeA; fFiltro.dispatchEvent(new W.w.Event('change'));
+        // ── cor por cartão ──
+        ler(W, "appData.faturas.push({card:'Mercado Pago',name:'Mouse',category:'Outros',amount:50,curr:1,total:1,dia:3,mesInicio:monthNames[HISTORY_COUNT]}); appData.faturas[0].dia=2; salvarDados(); processarDadosERenderizar(); setComprasModo('mes');");
+        await assentar(W);
+        const cores = ler(W, "__charts.filter(c=>c.options&&c.options.onClick).slice(-1)[0].data.datasets.map(d=>d.backgroundColor).join('|')");
+        check('cada cartão tem a sua cor no gráfico de compras', String(cores).split('|').length === 2 && new Set(String(cores).split('|')).size === 2, cores);
+        ler(W, "setComprasModo('acumulado')");
+        // ── nome com HTML ──
+        ler(W, `document.getElementById('novaCategoria').value='<b id="injetado">x</b>'; adicionarCategoria();`);
+        check('nome com HTML no aviso aparece como texto, não vira elemento', ler(W, "document.querySelector('#toastContainer #injetado')") === null && /<b id=/.test(String(ler(W, "document.getElementById('toastContainer').textContent"))), ler(W, "document.getElementById('toastContainer').innerHTML.slice(-120)"));
+        ler(W, `appData.categorias.push('Café "bom"'); appData.faturas.push({card:'Credicard',name:'Pó',category:'Café "bom"',amount:9,curr:1,total:1,mesInicio:monthNames[HISTORY_COUNT]}); salvarDados(); processarDadosERenderizar();`);
+        await assentar(W);
+        check('categoria com aspas não quebra o filtro de categoria', ler(W, `[...document.getElementById('filterStore').options].some(o=>o.value==='Café "bom"')`) === true, ler(W, `[...document.getElementById('filterStore').options].map(o=>o.value).join('|')`));
+        // ── parcela vazia ──
+        const qtdFat = ler(W, 'appData.faturas.length');
+        const d = W.w.document;
+        ler(W, "rebuildFormSelects()");
+        d.getElementById('newType').value = 'Credicard'; d.getElementById('newName').value = 'Sem parcela'; d.getElementById('newAmount').value = '10';
+        d.getElementById('newCurr').value = ''; d.getElementById('newTotal').value = '';
+        d.getElementById('addExpenseForm').dispatchEvent(new W.w.Event('submit'));
+        check('parcela em branco é recusada, em vez de gravar compra que some dos cálculos', ler(W, 'appData.faturas.length') === qtdFat, ler(W, 'JSON.stringify(appData.faturas.slice(-1))'));
+        d.getElementById('newCurr').value = '1'; d.getElementById('newTotal').value = '1';
+        // ── id de sync (texto) nos botões de meta e cenário ──
+        ler(W, "appData.metas.push({id:'lg-abc',name:'Viagem',target:1000,mensal:10,acumulado:0}); salvarDados(); renderMetasModal();");
+        await assentar(W);
+        ler(W, "document.querySelector('#metasListaModal input').value='500'; document.querySelector('#metasListaModal input').dispatchEvent(new Event('change'));");
+        check('meta com id de texto: o campo funciona', ler(W, "appData.metas.find(m=>m.id==='lg-abc').acumulado") === 500, ler(W, 'JSON.stringify(appData.metas)'));
+        ler(W, "document.querySelector('#metasListaModal button[title=\"Remover\"]').click(); document.getElementById('confirmOkBtn').click();");
+        check('meta com id de texto: o botão de remover funciona', ler(W, "appData.metas.some(m=>m.id==='lg-abc')") === false, ler(W, 'JSON.stringify(appData.metas)'));
+        await assentar(W);
+        // ── item com valor nulo não derruba a tela ──
+        ler(W, "appData.fixas.push({name:'Sem valor',amount:null}); processarDadosERenderizar();");
+        check('valor nulo (backup editado à mão) não apaga as tabelas', String(ler(W, "document.getElementById('fixedExpensesBody').textContent")).includes('Sem valor'));
+        ler(W, "appData.fixas.pop();");
+        // ── taxas: mudar uma não regrava as outras ──
+        const M = await abrirAparelho('Mac');
+        ler(W, "document.getElementById('invCfgSelic').value='13.25'; document.getElementById('invCfgSelic').dispatchEvent(new Event('input'));"); await assentar(W);
+        ler(W, "appData.investimentos.config.ipcaAnual = 0.04567; salvarDados();"); await assentar(W);   // mais casas do que o campo mostra (4,57)
+        const carimboIpca = ler(W, "appData.ts['investimentos.config:ipcaAnual']");
+        await voltarAoApp(M);
+        check('o campo da taxa acompanha o que veio do outro aparelho', ler(M, "document.getElementById('invCfgSelic').value") === '13.25', ler(M, "document.getElementById('invCfgSelic').value"));
+        ler(M, "document.getElementById('invCfgCdi').value='11.11'; document.getElementById('invCfgCdi').dispatchEvent(new Event('input'));"); await assentar(M);
+        check('mudar o CDI aqui não devolve a Selic antiga', Math.round(ler(M, 'appData.investimentos.config.selicAnual') * 10000) === 1325 && Math.round(ler(M, 'appData.investimentos.config.cdiAnual') * 10000) === 1111, ler(M, 'JSON.stringify(appData.investimentos.config)'));
+        check('a taxa que ninguém mexeu continua exata (o campo mostra arredondado, e isso não pode ser regravado)', ler(M, 'appData.investimentos.config.ipcaAnual') === 0.04567, ler(M, 'appData.investimentos.config.ipcaAnual'));
+        check('e a taxa que ninguém mexeu não ganha carimbo novo', carimboIpca > 0 && ler(M, "appData.ts['investimentos.config:ipcaAnual']") === carimboIpca, { antes: carimboIpca, depois: ler(M, "appData.ts['investimentos.config:ipcaAnual']") });
+        // ── a tela não espera a rede ──
+        const blobLocal = ler(W, `localStorage.getItem('${CHAVE_LS}')`);
+        let soltaLenta; const leituraLenta = new Promise(r => { soltaLenta = r; });
+        const Lento = await abrirAparelho('Lento', { localStorageInicial: blobLocal, segurarLeitura: leituraLenta });
+        check('a tela não espera a nuvem: o que está salvo aparece enquanto ela não responde', String(ler(Lento, "document.getElementById('fixedExpensesBody').textContent")).includes('Aluguel'), String(ler(Lento, "document.getElementById('fixedExpensesBody').textContent")).slice(0, 60));
+        check('e o selo diz que ainda está conectando', txt(Lento, 'headerSupaText') === 'Conectando...', txt(Lento, 'headerSupaText'));
+        Lento.estado.segurarLeitura = null; soltaLenta(); await dorme(10); await assentar(Lento);
+        check('quando ela responde, o selo acompanha', txt(Lento, 'headerSupaText') === 'Sincronizado', txt(Lento, 'headerSupaText'));
+        Lento.dom.window.close();
+        // ── rede presa não segura a fila ──
+        const Preso = await abrirAparelho('Preso', { localStorageInicial: blobLocal });
+        ler(Preso, 'SYNC_TIMEOUT_MS = 30');
+        Preso.estado.travarRede = true;
+        ler(Preso, "appData.rendas.push({name:'NaRedePresa',amount:1}); salvarDados();");
+        await dorme(120); await assentar(Preso);
+        check('rede que não responde desiste sozinha e o selo avisa', txt(Preso, 'headerSupaText') === 'Sem conexão', txt(Preso, 'headerSupaText'));
+        Preso.estado.travarRede = false;
+        await voltarAoApp(Preso);
+        check('e a fila não ficou presa: com a rede de volta, o que ficou pendente sobe', naNuvem('rendas').includes('NaRedePresa'), naNuvem('rendas'));
+        Preso.dom.window.close();
+        // ── virada do mês com o app aberto ──
+        const Vira = await abrirAparelho('Virada');
+        ler(Vira, 'window.__recarregou = 0; _recarregarApp = function () { window.__recarregou++; };');
+        await voltarAoApp(Vira);
+        check('no mesmo mês, voltar ao app não recarrega', ler(Vira, 'window.__recarregou') === 0, ler(Vira, 'window.__recarregou'));
+        Vira.estado.skew += 40 * 24 * 60 * 60 * 1000;      // o tempo passou com o app aberto
+        check('o arreio consegue virar o mês', ler(Vira, '_virouOMes()') === true, ler(Vira, 'gerarMeses(1)[0] + " x " + monthNames[HISTORY_COUNT]'));
+        ler(Vira, "document.getElementById('editModal').classList.remove('hidden')");
+        await voltarAoApp(Vira);
+        check('virada do mês com modal aberto não recarrega por cima de quem digita', ler(Vira, 'window.__recarregou') === 0, ler(Vira, 'window.__recarregou'));
+        ler(Vira, "document.getElementById('editModal').classList.add('hidden')");
+        await voltarAoApp(Vira);
+        check('virada do mês: voltar ao app recarrega (senão o lançamento cai no mês errado)', ler(Vira, 'window.__recarregou') === 1, ler(Vira, 'window.__recarregou'));
+        Vira.dom.window.close();
+        // ── categoria com nome de propriedade de objeto ──
+        check('categoria chamada "constructor" não perde o limite na fusão', ler(W, "mesclarAppData({limites:{constructor:5}}, {limites:{},_syncTs:Date.now()}).limites.constructor") === 5, ler(W, "String(mesclarAppData({limites:{constructor:5}}, {limites:{},_syncTs:Date.now()}).limites.constructor).slice(0,40)"));
+        // ── eixo dos gráficos: rótulos que dizem o valor ──
+        const rotulosEixo = ler(W, "[0,250,500,750,1000,1500,2000,12500,-500,-1500].map(_eixoMoeda).join('|')");
+        check('eixo com marcas pequenas não repete rótulo', rotulosEixo === 'R$0|R$250|R$500|R$750|R$1k|R$1,5k|R$2k|R$12,5k|R$-500|R$-1,5k', rotulosEixo);
+        const cbEixos = ler(W, "__charts.slice(-12).filter(c=>c.options&&c.options.scales&&c.options.scales.y&&c.options.scales.y.ticks&&c.options.scales.y.ticks.callback).map(c=>c.options.scales.y.ticks.callback(500)).join('|')");
+        check('e os gráficos usam esse rótulo de verdade', /R\$500/.test(String(cbEixos)) && !/R\$\s?1k|R\$0k/.test(String(cbEixos)), cbEixos);
+        // ── histórico: a ação "editar" não aparece crua ──
+        ler(W, "logHistorico('editar','fixa','Teste',1); abrirHistorico();");
+        check('ação "editar" tem rótulo no histórico', /Editado/.test(String(ler(W, "document.getElementById('histBody').querySelector('.hist-badge').textContent"))), ler(W, "document.getElementById('histBody').querySelector('.hist-badge').textContent"));
+        ler(W, "document.getElementById('histModal').classList.add('hidden')");
+        await assentar(W);
+        // ── apagar tudo propaga também mapas e configs ──
+        ler(W, "salvarLimite('Viagem', 100); planSetEconomia(50, true);"); await assentar(W);
+        ler(W, 'resetarDados(); document.getElementById("confirmOkBtn").click();'); await assentar(W);
+        await voltarAoApp(M);
+        check('"Apagar todos os dados" limpa limites e pagamentos no outro aparelho', !ler(M, "appData.limites['Viagem']") && ler(M, 'Object.keys(appData.pagamentos).length') === 0, { limites: ler(M, 'JSON.stringify(appData.limites)'), pag: ler(M, 'JSON.stringify(appData.pagamentos)') });
+        check('e o planejamento volta ao padrão', ler(M, 'appData.planejamento.economia') === 0, ler(M, 'appData.planejamento.economia'));
+        // ── import é autoritativo nas células também ──
+        ler(W, "salvarLimite('Viagem', 150)"); await assentar(W);
+        await voltarAoApp(M);
+        await dorme(3);
+        ler(M, "salvarLimite('Viagem', 200)"); await assentar(M);    // o Windows não viu este 200: para ele nada muda ao importar 150
+        const blobBackup = JSON.stringify({ rendas: [], fixas: [], faturas: [], dividas: [], limites: { Viagem: 150 }, planejamento: { economia: 40 } });
+        ler(W, `(function(){ appData = normalizarAppData(JSON.parse(${JSON.stringify(blobBackup)})); _syncCarimbar(); _syncRestaurar(); salvarDados(); })()`); await assentar(W);
+        await voltarAoApp(M);
+        check('importar backup vence edição anterior também em limite e config', ler(M, "appData.limites['Viagem']") === 150 && ler(M, 'appData.planejamento.economia') === 40, { lim: ler(M, "appData.limites['Viagem']"), eco: ler(M, 'appData.planejamento.economia') });
+        W.dom.window.close(); M.dom.window.close();
+    }
+
+    secao('38. A linha que o próprio SQL do app cria (r125)');
+    {   // O SQL da tela de configuração semeia a linha, e o carimbo dela vem do now() do banco:
+        // com microssegundos e fuso. É o caminho de todo usuário novo, então é caso de teste.
+        const seed = (htmlBase.match(/values \(1, '(\{[^']*\})'\)/) || [])[1];
+        check('o SQL do app ainda semeia a linha', !!seed, seed);
+        zerarNuvem();
+        nuvem.payload = JSON.parse(seed || '{}');
+        nuvem.updated_at = '2026-11-04T12:34:56.123456+00:00';
+        const e0 = nuvem.escritas;
+        const N1 = await abrirAparelho('Novo-1');
+        check('abrir um app vazio contra a linha recém-criada não grava', nuvem.escritas === e0, nuvem.escritas - e0);
+        lancar(N1, 'Fixa', 'Primeira', 10); await assentar(N1);
+        check('o 1º lançamento entra pela escrita condicional (carimbo com microssegundos e +00:00)', naNuvem('fixas').includes('Primeira'), { fixas: naNuvem('fixas'), status: txt(N1, 'headerSupaText') });
+        nuvem.updated_at = null;     // linha antiga, sem carimbo
+        lancar(N1, 'Fixa', 'Segunda', 10); await assentar(N1);
+        check('linha com updated_at nulo também aceita a escrita', naNuvem('fixas').includes('Segunda'), naNuvem('fixas'));
+        // tabela vazia, sem linha nenhuma (quem pulou o INSERT do SQL)
+        zerarNuvem();
+        const postsAntes = nuvem.posts;
+        lancar(N1, 'Fixa', 'Terceira', 10); await assentar(N1);
+        check('tabela sem linha: cria a linha', nuvem.posts === postsAntes + 1 && naNuvem('fixas').includes('Terceira'), naNuvem('fixas'));
+        N1.dom.window.close();
+    }
+
+    secao('39. Texto-fonte que nada mais confere');
+    {
+        const bruto = fs.readFileSync(ARQ, 'utf8');
+        const iCdn = bruto.indexOf('src="https://cdn.tailwindcss.com"'), iCfg = bruto.indexOf('tailwind.config =');
+        check('tailwind.config vem DEPOIS do script do Tailwind (antes dava erro em toda abertura)', iCdn >= 0 && iCfg > iCdn, { iCdn, iCfg });
+        const csp = (bruto.match(/http-equiv="Content-Security-Policy"\s+content="([^"]*)"/) || [])[1] || '';
+        check('a CSP de produção libera a nuvem só em https://*.supabase.co', /connect-src 'self' https:\/\/\*\.supabase\.co;/.test(csp), csp.slice(0, 200));
+        const usaDataNow = (bruto.match(/(?:appData\.(?:add|del)\[[^\]]*\]|updatedAt)\s*=\s*Date\.now\(\)/g) || []);
+        check('nenhum carimbo de sync escrito direto com o relógio de parede', usaDataNow.length === 0, usaDataNow);
+    }
+
     relatorio();
 })().catch(e => { console.error('\nFALHA DO HARNESS:', e); process.exit(2); });
 
@@ -914,6 +1521,6 @@ function naNuvemObj(col) { return (nuvem.payload && nuvem.payload[col]) || []; }
 function relatorio() {
     console.log('\n' + '='.repeat(64));
     if (erros.length) { console.log('ERROS DE RUNTIME (' + erros.length + '):'); erros.slice(0, 12).forEach(e => console.log('  ! ' + e)); }
-    console.log(`RESULTADO: ${ok} ✓ · ${fail} ✗ · runtime: ${erros.length} · GET ${nuvem.gets} / POST ${nuvem.posts}`);
+    console.log(`RESULTADO: ${ok} ✓ · ${fail} ✗ · runtime: ${erros.length} · leituras ${nuvem.gets} · checagens ${nuvem.checks} · escritas ${nuvem.escritas} (conflitos ${nuvem.conflitos})`);
     process.exit(fail || erros.length ? 1 : 0);
 }

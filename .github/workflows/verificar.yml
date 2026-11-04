@@ -42,6 +42,6 @@ jobs:
       #
       # A seção 14 (convivência com o build anterior) aparece como "⚠ pulado": ela depende do
       # `baseline.html`, que é derivado e git-excluded. É degrau LOCAL, rodado ao cortar
-      # release — o CI cobre as outras 27 seções.
+      # release — o CI cobre todas as outras.
       - name: Smoke §35 (sync multi-device + as 3 regras invioláveis do §37)
         run: node tests/smoke-sync.js mgc-financas.html

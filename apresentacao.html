@@ -551,7 +551,7 @@
               <li><code>index.html</code> — redireciona a raiz para o app</li>
             </ul>
             <p>A ativação de uma versão nova descarta todo cache cujo nome não seja o da versão corrente, então renomear o cache a cada release invalida o anterior de forma determinística — sem depender de expiração nem de limpeza manual pelo usuário.</p>
-            <p>Só requisições <em>GET</em> são interceptadas: envios de dados nunca são servidos de cache. E o app compara a própria versão com a publicada, exibindo banner de atualização quando fica para trás.</p>
+            <p>Só os arquivos do próprio app e as bibliotecas passam por esse cache. A conversa com a nuvem fica de fora, nos dois sentidos: sem rede, a sincronização falha às claras em vez de receber uma cópia antiga como se fosse resposta nova. E o app compara a própria versão com a publicada, exibindo banner de atualização quando fica para trás.</p>
           </div>
         </div>
       </div>
@@ -835,7 +835,7 @@
           <p>Se você quiser ver as mesmas contas no computador e no celular, cria uma conta gratuita no Supabase, roda um trecho de SQL que o app entrega pronto e cola duas chaves na tela de configuração. São cinco minutos, uma vez.</p>
           <p>O banco é <b>seu</b>. O desenvolvedor não tem acesso a ele, não conhece suas chaves e não consegue lê-lo. Se você fechar a conta amanhã, perde a sincronização e continua com todos os dados no aparelho.</p>
 
-          <h3>Por que nada se perde</h3>
+          <h3>Como um aparelho não apaga o outro</h3>
           <p>Sincronizar é fácil quando um aparelho só escreve. O problema aparece quando dois escrevem: se cada um simplesmente gravasse a sua versão por cima, o último a salvar apagaria o lançamento que você fez no outro. O Margem nunca grava sem antes ler e fundir.</p>
 
           <figure>
@@ -889,12 +889,15 @@
 
           <div class="tech">
             <p class="tag">Ficha técnica · o algoritmo</p>
-            <p>Escrita por <b>caminho único</b>: a abertura do app e o salvamento de uma ação entram exatamente na mesma rotina. O ciclo é sempre <em>ler, fundir, gravar</em>, contra uma linha única cujo conteúdo é o documento JSON inteiro — o app não tem tabelas por entidade, tem um documento versionado.</p>
+            <p>Escrita por <b>caminho único</b>: a abertura do app e o salvamento de uma ação entram exatamente na mesma rotina. O ciclo é sempre <em>ler, fundir e, se houver novidade, gravar</em>, contra uma linha única cujo conteúdo é o documento JSON inteiro — o app não tem tabelas por entidade, tem um documento versionado.</p>
             <p>A guarda que sustenta tudo cabe numa frase: <b>leitura falhou, não grava.</b> Sem ela, o app gravaria sua versão local sobre a remota sem ter fundido — que é exatamente a operação que apaga o lançamento feito no outro aparelho.</p>
             <ul class="list">
-              <li><b>Carimbos.</b> Cada item ganha identificador próprio e data de alteração no momento em que é salvo; a fusão resolve o conflito pelo mais recente, item a item, e não documento contra documento.</li>
+              <li><b>Carimbos.</b> Cada item ganha identificador próprio e data de alteração no momento em que é salvo; a fusão resolve o conflito pelo mais recente, item a item, e não documento contra documento. Vale também para o que não é lançamento: o limite de cada categoria, cada conta marcada como paga e cada taxa têm data própria, então editar num aparelho não perde para o outro só porque ele abriu depois.</li>
+              <li><b>Relógio que não anda para trás.</b> A data de uma alteração nunca fica atrás do que o aparelho já viu. Assim, um computador com o relógio alguns minutos atrasado não perde para a versão que ele acabou de ler.</li>
+              <li><b>Abrir não é editar.</b> Sem nada novo para enviar, o app só lê. A gravação acontece quando há o que gravar.</li>
               <li><b>Marcadores de exclusão.</b> Apagar não faz o item sumir — grava um marcador dizendo que ele foi removido. Sem isso, a fusão traria de volta o item apagado num aparelho a partir da cópia do outro, e ele ressuscitaria sozinho.</li>
-              <li><b>Fila serializada.</b> As sincronizações são encadeadas, então duas ações rápidas não disputam a mesma linha. Uma falha não trava a fila.</li>
+              <li><b>Fila serializada e gravação condicional.</b> As sincronizações são encadeadas, então duas ações rápidas não disputam a mesma linha, e uma falha não trava a fila. Entre aparelhos diferentes, a gravação só é aceita se a nuvem ainda está como foi lida: se outro aparelho gravou no meio, o app lê de novo e funde.</li>
+              <li><b>Janela aberta acompanha.</b> Ao voltar para uma janela que ficou aberta, o app confere se algo mudou lendo só a data da última gravação. Os dados só descem quando há novidade, e a tela se atualiza sem recarregar.</li>
               <li><b>Offline seguro.</b> Sem rede o app avisa uma vez, mantém tudo no armazenamento local e sobe na próxima oportunidade. Nada é descartado por falta de conexão.</li>
             </ul>
           </div>

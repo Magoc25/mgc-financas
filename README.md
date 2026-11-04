@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas Margem é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.21.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.22.0-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -30,7 +30,9 @@ Depois de abrir a URL acima, você pode instalar como aplicativo nativo, com íc
 
 | Plataforma | Como instalar |
 |---|---|
-| **Chrome / Edge no PC** | Clique no ícone de instalação (☐ com seta) na barra de endereços → Instalar |
+| **Mac (Safari)** | Menu **Arquivo → "Adicionar ao Dock"** — ícone próprio, janela sem barra de endereços, entra no Launchpad |
+| **Mac (Chrome / Edge)** | Ícone de instalação (☐ com seta) na barra de endereços → Instalar |
+| **Windows / Linux (Chrome / Edge)** | Ícone de instalação (☐ com seta) na barra de endereços → Instalar |
 | **Android (Chrome)** | Menu (⋮) → "Instalar app" ou "Adicionar à tela inicial" |
 | **iPhone / iPad (Safari)** | Compartilhar (□↑) → "Adicionar à Tela de Início" |
 
@@ -211,13 +213,13 @@ Vá em **Settings → Data API**:
 1. Abra o dashboard → clique em **⚙** (engrenagem no topo, ao lado do título — no celular: **⋯ Mais → ⚙ Configurar Supabase**)
 2. Cole a **Project URL** e a **Publishable key**
 3. Clique em **Salvar e conectar**
-4. Os dados são enviados imediatamente e sincronizados a cada salvamento
+4. Os dados são enviados imediatamente e sincronizados a cada salvamento — e, ao voltar para uma janela que ficou aberta, o app confere a nuvem e atualiza sozinho
 
 #### E se eu ficar meses sem abrir o app?
 
 O Supabase suspende projetos gratuitos depois de cerca de 7 dias **sem acesso ao serviço**. Não há nada para configurar — só vale saber o que acontece:
 
-- **Usar o app mantém o projeto ativo.** Cada salvamento é um acesso; quem abre o Margem toda semana nunca esbarra nisso.
+- **Usar o app mantém o projeto ativo.** Abrir e salvar contam como acesso; quem usa o Margem toda semana nunca esbarra nisso.
 - **Ficando muito tempo sem abrir, a sincronização para.** O app continua funcionando normalmente com os dados que estão no aparelho — o que pausa é a cópia na nuvem, não o app.
 - **Para voltar:** entre no painel do Supabase e clique em **Restore project**. Leva alguns minutos e **nada é apagado** — seus dados continuam lá.
 

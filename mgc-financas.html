@@ -20,8 +20,8 @@
     <link id="appleIcon" rel="apple-touch-icon" href="./icon-192.png">
     <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
     <link rel="manifest" href="./manifest.json">
-    <script>tailwind.config = { darkMode: 'class' }</script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>if (window.tailwind) tailwind.config = { darkMode: 'class' };</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -445,7 +445,6 @@
     <div class="modal-box">
         <h3 class="text-lg font-semibold mb-4 text-indigo-700">Editar Item</h3>
         <input type="hidden" id="editTipo">
-        <input type="hidden" id="editIndex">
         <div class="space-y-3">
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
@@ -1449,62 +1448,183 @@ function setSupaStatus(status, text) {
     });
 }
 
+let SYNC_TIMEOUT_MS = 20000;     // rede presa não pode segurar a fila de sync para sempre
+const SYNC_TENTATIVAS = 4;       // releituras quando outro aparelho grava no meio da nossa escrita
+
 async function supaFetch(path, options = {}) {
     if (!SUPA_URL || !SUPA_KEY) return null;
     const url = SUPA_URL.replace(/\/$/, '') + '/rest/v1/' + path;
+    const ctrl  = new AbortController();
+    const prazo = setTimeout(() => ctrl.abort(), SYNC_TIMEOUT_MS);
     try {
-        const res = await fetch(url, { ...options, headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json', ...(options.headers || {}) } });
+        // no-store: leitura velha do cache HTTP aqui é justamente o que a fusão não pode receber
+        const res = await fetch(url, { ...options, cache: 'no-store', signal: ctrl.signal, headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json', ...(options.headers || {}) } });
         if (!res.ok) throw new Error(await res.text());
         return res;
     } catch(e) { console.error('Supabase:', e.message); return null; }
+    finally { clearTimeout(prazo); }
 }
 
 // CAMINHO ÚNICO de escrita do blob (guia §15 · r68a): select → merge → update.
-// O boot e o save entram pela MESMA função — duas funções que escrevem envelhecem
-// desencontradas (r66b). Leitura falhou? NÃO grava: escrever sem ter fundido é
-// justamente o que apaga o lançamento feito no outro aparelho.
+// O boot, o save e a volta ao app entram pela MESMA função — duas funções que escrevem
+// envelhecem desencontradas (r66b). Leitura falhou? NÃO grava: escrever sem ter fundido
+// é justamente o que apaga o lançamento feito no outro aparelho.
 let _syncFila = Promise.resolve();
+let _syncAgendada = null;       // sincronização na fila que ainda não começou: ela já vai levar tudo
 let _syncAvisoOffline = 0;
+let _syncPendente = false;      // há alteração local que a nuvem ainda não tem
+let _syncComErro  = false;
+let _syncRev;                   // updated_at da linha lida/gravada por último (undefined = ainda não leu)
 async function sincronizarSupabase(motivo) {
     if (!SUPA_URL || !SUPA_KEY) return false;
-    const tarefa = _syncFila.then(() => _sincronizarAgora(motivo), () => _sincronizarAgora(motivo));
-    _syncFila = tarefa.catch(() => {});   // uma falha não trava a fila
+    if (_syncAgendada) return _syncAgendada;   // cada ação dispara 2 saves (logHistorico + salvarDados)
+    const rodar = () => { _syncAgendada = null; return _sincronizarAgora(motivo); };
+    const tarefa = _syncFila.then(rodar, rodar);
+    _syncAgendada = tarefa;
+    _syncFila = tarefa.catch(() => {});        // uma falha não trava a fila
     return tarefa;
 }
 
+function _syncFalhou(texto) {
+    _syncComErro = true;
+    setSupaStatus('error', texto);
+    if (_syncPendente && Date.now() - _syncAvisoOffline > 10000) { _syncAvisoOffline = Date.now(); toast('Sem conexão com a nuvem — salvo só neste aparelho, sobe sozinho quando voltar.', 'warning'); }
+    return false;   // fica no localStorage e sobe na próxima sincronização, sem perder nada
+}
+
+function _syncConcluiu() {
+    _syncComErro = false;
+    setSupaStatus('connected', 'Sincronizado');
+    return true;
+}
+
+function _gravarLocal() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); return true; }
+    catch (e) { console.error('localStorage:', e); toast('Sem espaço para salvar neste aparelho — exporte um backup.', 'error'); return false; }
+}
+
 async function _sincronizarAgora(motivo) {
-    setSupaStatus('syncing', motivo === 'boot' ? 'Conectando...' : 'Salvando...');
-    const res = await supaFetch('finance_data?id=eq.1&select=payload');
-    if (!res) {
-        setSupaStatus('error', 'Sem conexão');
-        // 1 aviso por vez: cada ação dispara 2 saves (logHistorico + salvarDados)
-        if (motivo !== 'boot' && Date.now() - _syncAvisoOffline > 10000) { _syncAvisoOffline = Date.now(); toast('Sem conexão — salvo só neste aparelho.', 'warning'); }
-        return false;   // fica no localStorage e sobe na próxima sincronização, sem perder nada
+    setSupaStatus('syncing', motivo === 'boot' ? 'Conectando...' : motivo === 'foco' ? 'Atualizando...' : 'Salvando...');
+    for (let tentativa = 0; tentativa < SYNC_TENTATIVAS; tentativa++) {
+        const res = await supaFetch('finance_data?id=eq.1&select=payload,updated_at');
+        let linhas = null;
+        if (res) { try { linhas = await res.json(); } catch (e) { console.error('Supabase: resposta ilegível', e); } }
+        if (!Array.isArray(linhas)) return _syncFalhou('Sem conexão');
+        const linha  = linhas[0] || null;
+        const remoto = linha ? linha.payload : null;
+        if (remoto != null && typeof remoto !== 'object') return _syncFalhou('Nuvem ilegível');   // nunca grava por cima do que não conseguiu ler
+
+        const antes   = _syncCanon(appData), antesTela = _syncCanon(appData, true);
+        const fundido = remoto ? mesclarAppData(remoto, appData) : normalizarAppData(appData);
+        const canon   = _syncCanon(fundido);
+        // Abrir o app não é editar: sem nada novo, não há o que gravar. Era o boot regravando
+        // o blob que fazia todo aparelho recém-aberto parecer "o mais novo" para os outros.
+        const precisaGravar = !remoto || canon !== _syncCanon(normalizarAppData(JSON.parse(JSON.stringify(remoto))));
+
+        appData = fundido;
+        _syncPendente = false;                         // tudo que foi editado até aqui está no fundido
+        if (precisaGravar) appData._syncTs = _syncAgora();
+        _syncSnapshot();                               // o fundido passa a ser a base dos próximos carimbos
+        _gravarLocal();
+
+        // A fusão trouxe novidade? A tela acompanha — antes ela seguia mostrando o valor velho
+        // até alguém recarregar, e um toque na linha errada gravava em cima do que não se via.
+        if (canon !== antes && _syncCanon(appData, true) !== antesTela) {
+            _aposFusaoRemota();
+            if (motivo !== 'boot') toast('Atualizado com as alterações de outro aparelho.', 'info');
+        }
+
+        if (!precisaGravar) { _syncRev = linha ? linha.updated_at : null; return _syncConcluiu(); }
+        const r = await _gravarNuvem(linha);
+        if (r === 'ok') return _syncConcluiu();
+        if (r === 'erro') { _syncPendente = true; return _syncFalhou('Falha ao salvar'); }
+        // 'conflito': outro aparelho gravou entre a nossa leitura e a nossa escrita → relê e funde de novo
     }
-    let remoto = null;
-    try { const linhas = await res.json(); if (linhas && linhas[0]) remoto = linhas[0].payload; } catch (e) { console.error('Supabase: payload ilegível', e); }
+    _syncPendente = true;
+    return _syncFalhou('Falha ao salvar');
+}
 
-    appData = remoto ? mesclarAppData(remoto, appData) : normalizarAppData(appData);
-    appData._syncTs = Date.now();
-    _syncSnapshot();                                   // o fundido passa a ser a base dos próximos carimbos
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+// Escrita condicional: só grava se a linha ainda é a que foi lida. Sem isto, dois aparelhos
+// no meio do select → merge → update fazem o 2º apagar da nuvem o que o 1º acabou de gravar.
+async function _gravarNuvem(linha) {
+    const agora = new Date().toISOString();
+    let res;
+    if (!linha) {
+        res = await supaFetch('finance_data?select=updated_at', { method: 'POST', headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify({ id: 1, payload: appData, updated_at: agora }) });
+    } else {
+        const filtro = linha.updated_at == null ? 'updated_at=is.null' : 'updated_at=eq.' + encodeURIComponent(linha.updated_at);
+        res = await supaFetch('finance_data?id=eq.1&' + filtro + '&select=updated_at', { method: 'PATCH', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify({ payload: appData, updated_at: agora }) });
+    }
+    if (!res) return 'erro';
+    let linhas = null;
+    try { linhas = await res.json(); } catch (e) { /* gravou, só não deu para ler a confirmação */ }
+    if (Array.isArray(linhas) && linhas.length === 0) return 'conflito';
+    _syncRev = (Array.isArray(linhas) && linhas[0]) ? linhas[0].updated_at : undefined;   // undefined → a próxima checagem relê
+    return 'ok';
+}
 
-    const ok = await supaFetch('finance_data', { method: 'POST', headers: { 'Prefer': 'resolution=merge-duplicates' }, body: JSON.stringify({ id: 1, payload: appData, updated_at: new Date().toISOString() }) });
-    if (ok) setSupaStatus('connected', 'Sincronizado');
-    else { setSupaStatus('error', 'Falha ao salvar'); toast('Não foi possível salvar no Supabase.', 'warning'); }
-    return !!ok;
+// A fusão mudou dados que já estavam na tela. Não mexe em modal aberto: quem está digitando
+// não perde o que digitou, e o salvar dos modais localiza o item pelo id, não pela posição.
+function _aposFusaoRemota() {
+    _safeRender(rebuildFormSelects, 'selects');
+    _safeRender(processarDadosERenderizar, 'dashboard');
+    _safeRender(_invSincronizarCampos, 'investimentos');
 }
 
 async function carregarDoSupabase() {
     if (!SUPA_URL || !SUPA_KEY) return false;
-    const ok = await sincronizarSupabase('boot');
-    // Reconstrói os selects/datalist com as categorias, cartões e descrições recém-fundidos
-    // (senão categorias criadas em outro dispositivo não aparecem em "Adicionar Novo Lançamento").
-    if (ok && document.getElementById('newCategory')) rebuildFormSelects();
-    return ok;
+    return sincronizarSupabase('boot');
 }
 
 async function salvarNoSupabase() { return sincronizarSupabase('save'); }
+
+// Volta ao app: confere a nuvem. Janela aberta há horas (PWA no Dock/barra de tarefas) ficava
+// com a foto de quando abriu e não via o que o outro aparelho gravou. A checagem lê só o
+// carimbo da linha (algumas dezenas de bytes): o blob só vem quando alguma coisa mudou.
+const SYNC_CHECA_MS     = 60000;
+const SYNC_CHECA_MIN_MS = 5000;     // foco + visibilidade costumam disparar juntos
+let _syncUltChecagem = 0;
+async function checarNuvem(forcar) {
+    if (!SUPA_URL || !SUPA_KEY || document.hidden) return;
+    const agora = Date.now();
+    if (!forcar && agora - _syncUltChecagem < SYNC_CHECA_MIN_MS) return;
+    _syncUltChecagem = agora;
+    if (_syncPendente || _syncRev === undefined) { await sincronizarSupabase('foco'); return; }
+    const res = await supaFetch('finance_data?id=eq.1&select=updated_at');
+    if (!res) { _syncComErro = true; setSupaStatus('error', 'Sem conexão'); return; }
+    let linhas = null;
+    try { linhas = await res.json(); } catch (e) { return; }
+    if (!Array.isArray(linhas)) return;
+    if ((linhas[0] ? linhas[0].updated_at : null) !== _syncRev) { await sincronizarSupabase('foco'); return; }
+    if (_syncComErro) _syncConcluiu();
+}
+// App aberto na virada do mês continuaria achando que "mês atual" é o anterior, e o lançamento
+// novo cairia no mês errado sem aviso. Recarrega ao voltar, exceto com modal aberto.
+function _virouOMes() { return gerarMeses(1)[0] !== monthNames[HISTORY_COUNT]; }
+function _recarregarApp() { location.reload(); }
+function _aoVoltarAoApp(forcar) {
+    if (document.hidden) return;
+    if (_virouOMes() && !document.querySelector('.modal-overlay:not(.hidden)')) { _recarregarApp(); return; }
+    checarNuvem(forcar);
+}
+function _ligarChecagemDaNuvem() {
+    document.addEventListener('visibilitychange', () => _aoVoltarAoApp());
+    window.addEventListener('focus',    () => _aoVoltarAoApp());
+    window.addEventListener('pageshow', e => { if (e.persisted) _aoVoltarAoApp(true); });
+    window.addEventListener('online',   () => _aoVoltarAoApp(true));
+    setInterval(() => _aoVoltarAoApp(), SYNC_CHECA_MS);
+    // Outra janela/aba DESTE navegador gravou: mesma memória de disco, duas cópias em RAM. Sem
+    // fundir aqui, o próximo save desta janela sobrescreveria no disco o que a outra salvou.
+    window.addEventListener('storage', e => {
+        if (e.key !== STORAGE_KEY || !e.newValue) return;
+        try {
+            const antes = _syncCanon(appData, true);
+            appData = mesclarAppData(JSON.parse(e.newValue), appData);
+            _syncSnapshot();
+            if (_syncCanon(appData, true) !== antes) { _syncPendente = true; _aposFusaoRemota(); }   // a outra janela pode ter fechado antes de enviar
+        } catch (err) { console.error('storage:', err); }
+    });
+}
 
 function abrirSettings() {
     document.getElementById('inputSupaUrl').value = SUPA_URL;
@@ -1533,8 +1653,8 @@ async function salvarConfig() {
     document.getElementById('settingsModal').classList.add('hidden');
     toast('Configuração salva! Carregando dados...', 'info');
     const ok = await carregarDoSupabase();
-    if (ok) { processarDadosERenderizar(); toast('Dados carregados do Supabase!', 'success'); }
-    else toast('Conectado, mas nenhum dado. Use "Importar Backup".', 'warning');
+    if (ok) { rebuildFormSelects(); processarDadosERenderizar(); toast('Dados carregados do Supabase!', 'success'); }
+    else toast('Não foi possível conectar — confira a URL, a chave e se a tabela foi criada.', 'error');
 }
 function copiarSQL() { navigator.clipboard.writeText(document.getElementById('sqlBlock').textContent).then(() => toast('SQL copiado!', 'info')); }
 document.getElementById('settingsModal').onclick = function(e) { if (e.target === this) this.classList.add('hidden'); };
@@ -1543,7 +1663,7 @@ document.getElementById('settingsModal').onclick = function(e) { if (e.target ==
 // CONFIG & HELPERS
 // ============================================================
 const APP_NAME       = 'Margem'; // © 2026 MGC Dev
-const APP_VERSION    = '4.21.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
+const APP_VERSION    = '4.22.0'; // fonte única — bumpe SÓ aqui a cada release (atualizado por update-version.sh)
 const TOAST_DURATION = 3200;
 const ANIM_DURATION  = 500;
 
@@ -1613,6 +1733,12 @@ function getColor(cat) {
     const idx = getCategorias().indexOf(cat) - PREDEFINED_CATEGORIES.length;
     return EXTRA_COLORS[Math.max(0, idx) % EXTRA_COLORS.length];
 }
+// Cartão não é categoria: pelo getColor todos caíam no índice negativo → a MESMA cor, e o
+// gráfico empilhado por cartão virava uma coluna só, sem como separar um cartão do outro.
+function getColorCartao(card) {
+    const i = getCartoes().indexOf(card);
+    return EXTRA_COLORS[Math.max(0, i) % EXTRA_COLORS.length];
+}
 // Privacidade: oculta valores por aba (Contas/Investir), persistido no dispositivo
 const PRIV_KEY = 'mgc_privacy';
 let _privacy = (() => { try { return Object.assign({ contas: false, investir: false }, JSON.parse(localStorage.getItem(PRIV_KEY) || '{}')); } catch (e) { return { contas: false, investir: false }; } })();
@@ -1620,7 +1746,8 @@ let _fmtCtx = 'contas';
 function _savePrivacy() { try { localStorage.setItem(PRIV_KEY, JSON.stringify(_privacy)); } catch (e) {} }
 function formatCurrency(val) {
     if ((_fmtCtx === 'contas' && _privacy.contas) || (_fmtCtx === 'investir' && _privacy.investir)) return 'R$ ••••';
-    return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    // Number(): um item com valor nulo (backup editado à mão) não pode derrubar a tela inteira
+    return (Number(val) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 // Nome dentro de um onclick/onchange inline (`fn('...')`): escapa para literal JS ANTES do
@@ -1628,6 +1755,13 @@ const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
 // para ' antes de o JS ser lido, e a chamada quebra (botão morre em silêncio). Ex.: uma
 // descrição "Conta d'água".
 const escJs = s => esc(String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"));
+// Rótulo do eixo Y. Arredondar sempre para "mil" repetia rótulos (R$0k, R$0k, R$1k, R$1k) em toda
+// escala com marcas menores que mil, e o eixo deixava de dizer quanto cada altura vale.
+function _eixoMoeda(v) {
+    const n = Number(v) || 0;
+    if (Math.abs(n) < 1000) return 'R$' + n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    return 'R$' + (n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'k';
+}
 function isDark() { return document.documentElement.classList.contains('dark'); }
 function chartTextColor()  { return isDark() ? '#94a3b8' : '#6b7280'; }
 function chartGridColor()  { return isDark() ? '#334155' : '#e5e7eb'; }
@@ -1684,7 +1818,8 @@ function normalizarAppData(data) {
     // ── Sync: envelope, tombstones e identidade por item (guia §15 · r66a) ──
     if (!data.del || typeof data.del !== 'object') data.del = {};   // tombstones  { id | prefixo+valor : ts }
     if (!data.add || typeof data.add !== 'object') data.add = {};   // carimbo de (re)inclusão dos conjuntos
-    if (typeof data._syncTs    !== 'number') data._syncTs    = 0;   // quando este blob foi fundido/gravado
+    if (!data.ts  || typeof data.ts  !== 'object') data.ts  = {};   // carimbo por CÉLULA de mapa/config (limite, pagamento, taxa…)
+    if (typeof data._syncTs    !== 'number') data._syncTs    = 0;   // quando este blob foi gravado na nuvem (só desempata legado)
     if (typeof data._histClear !== 'number') data._histClear = 0;   // "limpar histórico" (corte do log)
     data._v = 2;
     for (const col of SYNC_COLECOES) {
@@ -1712,8 +1847,8 @@ function normalizarAppData(data) {
 // ============================================================
 const SYNC_COLECOES  = ['rendas','fixas','faturas','dividas','rendasExtras','metas','investimentos.cenarios'];
 const SYNC_CONJUNTOS = ['categorias','cartoes','descricoes'];    // arrays de string → união
-const SYNC_MAPAS     = ['limites','pagamentos','carryForward'];  // por chave; conflito → blob mais novo
-const SYNC_CONFIGS   = ['planejamento','investimentos.config','meta','categoriasV2'];
+const SYNC_MAPAS     = ['limites','pagamentos','carryForward'];  // por chave, com carimbo próprio em `ts`
+const SYNC_CONFIGS   = ['planejamento','investimentos.config','meta','categoriasV2'];   // por campo, idem
 const SYNC_LOGS      = ['historico'];
 const SYNC_PREFIXO   = { categorias: 'cat:', cartoes: 'card:', descricoes: 'desc:' };
 const SYNC_TOMB_TTL  = 180 * 24 * 60 * 60 * 1000;   // poda tombstone velho (6 meses)
@@ -1739,9 +1874,67 @@ function _syncConteudo(it) {
     return JSON.stringify(c);
 }
 
+// Relógio dos carimbos: nunca fica atrás de nada que este aparelho já viu. Com o relógio de
+// parede puro, o aparelho atrasado 3 min perdia para a própria versão que ele acabou de ler:
+// a edição era descartada na fusão seguinte, na frente do usuário.
+let _syncUltimoTs = 0;
+function _syncAgora() { _syncUltimoTs = Math.max(Date.now(), _syncUltimoTs + 1); return _syncUltimoTs; }
+function _syncObservarRelogio() {
+    let max = Math.max(appData._syncTs || 0, appData._histClear || 0);
+    for (const col of SYNC_COLECOES) {
+        const arr = _syncPath(appData, col);
+        if (Array.isArray(arr)) for (const it of arr) if (it && it.updatedAt > max) max = it.updatedAt;
+    }
+    for (const m of [appData.del, appData.add, appData.ts]) for (const k in (m || {})) if (m[k] > max) max = m[k];
+    if (max > _syncUltimoTs) _syncUltimoTs = max;
+}
+
+// Célula = a menor coisa que o usuário edita num mapa/config: o limite DE UMA categoria, o
+// pago DE UMA conta num mês, a taxa CDI. É nela que mora o carimbo; o blob não tem como
+// responder "quem editou isto por último" — o relógio dele só diz quem sincronizou por último.
+function _syncCelulaPag(mes, sub, nome) { return 'pagamentos:' + mes + ':' + sub + ':' + nome; }
+function _syncCelulas(d) {
+    const c = {};
+    for (const col of SYNC_MAPAS) {
+        const m = _syncPath(d, col) || {};
+        for (const k of Object.keys(m)) {
+            if (col !== 'pagamentos') { c[col + ':' + k] = JSON.stringify(m[k]); continue; }
+            // pago é presença na lista: a célula só existe marcada, e sumir dela é desmarcar
+            for (const sub of Object.keys(m[k] || {})) if (Array.isArray(m[k][sub])) for (const nome of m[k][sub]) c[_syncCelulaPag(k, sub, nome)] = '1';
+        }
+    }
+    for (const col of SYNC_CONFIGS) {
+        const v = _syncPath(d, col);
+        if (v && typeof v === 'object') { for (const k of Object.keys(v)) c[col + ':' + k] = JSON.stringify(v[k]); }
+        else if (v !== undefined) c[col] = JSON.stringify(v);
+    }
+    return c;
+}
+
+// Forma canônica para comparar blobs: o `jsonb` devolve as chaves em outra ordem, e a ordem das
+// coleções/conjuntos não é dado aqui (o app não tem reordenação; cada aparelho mantém a sua).
+// Sem isto, dois aparelhos em ordens diferentes regravariam um por cima do outro para sempre.
+function _syncCanon(d, soVisivel) {
+    const c = JSON.parse(JSON.stringify(d));
+    delete c._syncTs;
+    if (soVisivel) { delete c.del; delete c.add; delete c.ts; delete c._histClear; delete c.historico; }
+    for (const col of SYNC_COLECOES) {
+        const a = _syncPath(c, col);
+        if (Array.isArray(a)) a.sort((x, y) => { const p = String(x && x.id), q = String(y && y.id); return p < q ? -1 : p > q ? 1 : 0; });
+    }
+    for (const col of SYNC_CONJUNTOS) { const a = _syncPath(c, col); if (Array.isArray(a)) a.sort(); }
+    const ord = v => {
+        if (Array.isArray(v)) return v.map(ord);
+        if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v).sort()) o[k] = ord(v[k]); return o; }
+        return v;
+    };
+    return JSON.stringify(ord(c));
+}
+
 // Espelho do último estado salvo: é dele que saem os carimbos (item novo, editado,
 // duplicado ou removido) SEM tocar em nenhum dos ~15 pontos que mexem nas coleções.
 let _snapSync = {};
+let _snapCelulas = {};
 function _syncSnapshot() {
     const snap = {};
     for (const col of SYNC_COLECOES) {
@@ -1753,11 +1946,13 @@ function _syncSnapshot() {
         if (Array.isArray(arr)) for (const s of arr) snap[col + ':' + s] = 1;
     }
     _snapSync = snap;
+    _snapCelulas = _syncCelulas(appData);
+    _syncObservarRelogio();
 }
 
 // Carimba o que mudou desde o último save. Roda no salvarDados(), antes de persistir.
 function _syncCarimbar() {
-    const agora = Date.now(), snap = {}, vistos = new Set();
+    const agora = _syncAgora(), snap = {}, vistos = new Set();
     for (const col of SYNC_COLECOES) {
         const arr = _syncPath(appData, col);
         if (!Array.isArray(arr)) continue;
@@ -1792,12 +1987,20 @@ function _syncCarimbar() {
         appData.del[(SYNC_PREFIXO[col] || '') + resto] = agora;
     }
     _snapSync = snap;
+    // Mapas e configs: mudou desde o último save → carimba a célula, nos DOIS sentidos.
+    // Sumir também é edição: é o que propaga o "desmarcar" e o "apagar todos os dados".
+    const celulas = _syncCelulas(appData);
+    for (const k of Object.keys(celulas)) if (_snapCelulas[k] !== celulas[k]) appData.ts[k] = agora;
+    for (const k of Object.keys(_snapCelulas)) if (!(k in celulas)) appData.ts[k] = agora;
+    _snapCelulas = celulas;
 }
 
 // Import de backup = restauração explícita (guia §15): recarimba os itens importados
 // para que nenhum tombstone antigo (daqui ou do outro aparelho) os reapague.
 function _syncRestaurar() {
-    const agora = Date.now();
+    const agora = _syncAgora();
+    _syncPendente = true;
+    for (const k of Object.keys(_syncCelulas(appData))) appData.ts[k] = agora;
     for (const col of SYNC_COLECOES) {
         const arr = _syncPath(appData, col);
         if (Array.isArray(arr)) for (const it of arr) if (it && typeof it === 'object') { if (it.id == null || it.id === '') it.id = _syncNovoId(); it.updatedAt = agora; }
@@ -1814,9 +2017,46 @@ function _syncRestaurar() {
 //   • coleção com id → união por id; mesmo id vence o updatedAt maior (empate → remoto, evita pingue-pongue)
 //   • exclusão       → tombstone del[id]; só apaga se o carimbo for >= updatedAt (edição posterior revive)
 //   • conjunto       → união; a string sobrevive se add[chave] >= del[chave]
-//   • mapa           → união de chaves; chave nos dois → blob mais novo (ausência NUNCA apaga)
-//   • config/escalar → blob mais novo
+//   • mapa/config    → por célula: vence o carimbo mais novo em `ts`, valendo também para ausência
+//   • célula sem carimbo dos dois lados (dado anterior aos carimbos) → regra antiga: ausência
+//     não apaga e, nos dois lados, vence o blob gravado por último. Nunca decide edição nova.
 //   • log            → união dedupada, corta no HIST_MAX e respeita "limpar histórico"
+//
+// ⚠️ `_syncTs` diz quem GRAVOU por último, não quem EDITOU por último. Decidir edição por ele foi
+// o que apagou dados entre PC e Mac até a v4.21.0: bastava o outro aparelho abrir para o blob dele
+// "ficar mais novo", e a edição seguinte daqui perdia na fusão — sumia daqui e da nuvem.
+function _syncFundirMapa(col, mR, mL, tsR, tsL, localMaisNovo) {
+    const fim = {}, tem = (o, k) => Object.prototype.hasOwnProperty.call(o, k);   // categoria pode se chamar "constructor"
+    for (const k of new Set([...Object.keys(mL), ...Object.keys(mR)])) {
+        const ck = col + ':' + k, tL = tsL[ck] || 0, tR = tsR[ck] || 0;
+        const fonte = tL !== tR ? (tL > tR ? mL : mR)
+                    : (tem(mL, k) && tem(mR, k)) ? (localMaisNovo ? mL : mR)
+                    : (tem(mL, k) ? mL : mR);
+        if (tem(fonte, k)) fim[k] = fonte[k];
+    }
+    return fim;
+}
+// Pagamentos: dois aparelhos marcando contas diferentes do MESMO mês têm de somar.
+// O carimbo é da célula (mês + conta); sem carimbo dos dois lados, marcado em algum lado = marcado.
+function _syncFundirPagamentos(mR, mL, tsR, tsL) {
+    const fim = {};
+    for (const mes of new Set([...Object.keys(mL), ...Object.keys(mR)])) {
+        const pL = mL[mes] || {}, pR = mR[mes] || {};
+        const saida = { fixas: [], cartoes: [] };
+        for (const sub of new Set(['fixas', 'cartoes', ...Object.keys(pL), ...Object.keys(pR)])) {
+            const aL = Array.isArray(pL[sub]) ? pL[sub] : [], aR = Array.isArray(pR[sub]) ? pR[sub] : [];
+            const lista = [];
+            for (const nome of new Set([...aL, ...aR])) {
+                const ck = _syncCelulaPag(mes, sub, nome), tL = tsL[ck] || 0, tR = tsR[ck] || 0;
+                const marcado = tL > tR ? aL.includes(nome) : tR > tL ? aR.includes(nome) : (aL.includes(nome) || aR.includes(nome));
+                if (marcado) lista.push(nome);
+            }
+            saida[sub] = lista;
+        }
+        if (Object.values(saida).some(a => a.length)) fim[mes] = saida;   // mês vazio é o mesmo que mês ausente
+    }
+    return fim;
+}
 function mesclarAppData(remoto, local) {
     const R = normalizarAppData(JSON.parse(JSON.stringify(remoto || {})));
     const L = normalizarAppData(local || {});
@@ -1826,6 +2066,8 @@ function mesclarAppData(remoto, local) {
     const del = {}, add = {};
     for (const [k, v] of [...Object.entries(R.del || {}), ...Object.entries(L.del || {})]) del[k] = Math.max(del[k] || 0, v || 0);
     for (const [k, v] of [...Object.entries(R.add || {}), ...Object.entries(L.add || {})]) add[k] = Math.max(add[k] || 0, v || 0);
+    const tsR = R.ts || {}, tsL = L.ts || {}, ts = { ...tsR };
+    for (const k of Object.keys(tsL)) ts[k] = Math.max(ts[k] || 0, tsL[k] || 0);
 
     for (const col of SYNC_COLECOES) {
         const aR = _syncPath(R, col) || [], aL = _syncPath(L, col) || [];
@@ -1859,18 +2101,26 @@ function mesclarAppData(remoto, local) {
             if ((del[pref + s] || 0) > (add[pref + s] || 0)) continue;  // removido depois da última inclusão
             fim.push(s);
         }
-        _syncSetPath(out, col, col === 'descricoes' ? fim.slice(0, 200) : fim);
+        // Passou do limite: a escolha do que fica tem de ser a MESMA nos dois aparelhos, senão
+        // cada um manteria o seu recorte e regravaria por cima do outro a cada sincronização.
+        if (col === 'descricoes' && fim.length > DESC_MAX) {
+            fim.sort((a, b) => (add[pref + b] || 0) - (add[pref + a] || 0) || (a < b ? -1 : a > b ? 1 : 0));
+            fim.length = DESC_MAX;
+        }
+        _syncSetPath(out, col, fim);
     }
 
     for (const col of SYNC_MAPAS) {
         const mR = _syncPath(R, col) || {}, mL = _syncPath(L, col) || {};
-        _syncSetPath(out, col, localMaisNovo ? { ...mR, ...mL } : { ...mL, ...mR });
+        _syncSetPath(out, col, col === 'pagamentos' ? _syncFundirPagamentos(mR, mL, tsR, tsL) : _syncFundirMapa(col, mR, mL, tsR, tsL, localMaisNovo));
     }
 
     for (const col of SYNC_CONFIGS) {
         const vR = _syncPath(R, col), vL = _syncPath(L, col);
-        if (vR && typeof vR === 'object' && vL && typeof vL === 'object') _syncSetPath(out, col, localMaisNovo ? { ...vR, ...vL } : { ...vL, ...vR });
-        else _syncSetPath(out, col, localMaisNovo ? (vL !== undefined ? vL : vR) : (vR !== undefined ? vR : vL));
+        if (vR && typeof vR === 'object' && vL && typeof vL === 'object') { _syncSetPath(out, col, _syncFundirMapa(col, vR, vL, tsR, tsL, localMaisNovo)); continue; }
+        const tL = tsL[col] || 0, tR = tsR[col] || 0;
+        const usaLocal = tL !== tR ? tL > tR : localMaisNovo;
+        _syncSetPath(out, col, usaLocal ? (vL !== undefined ? vL : vR) : (vR !== undefined ? vR : vL));
     }
 
     const corte = Math.max(L._histClear || 0, R._histClear || 0);
@@ -1880,15 +2130,15 @@ function mesclarAppData(remoto, local) {
         if (corte && (h._t || 0) < corte) continue;   // "limpar histórico" apaga o que é anterior ao corte
         const ch = [h._t || 0, h.ts, h.acao, h.tipo, h.nome, h.valor].join('|');
         if (vistosH.has(ch)) continue;
-        vistosH.add(ch); hist.push(h);
+        vistosH.add(ch); hist.push({ h, ch });
     }
-    hist.sort((a, b) => (b._t || 0) - (a._t || 0));
-    out.historico = hist.slice(0, HIST_MAX);
+    hist.sort((a, b) => (b.h._t || 0) - (a.h._t || 0) || (a.ch < b.ch ? -1 : a.ch > b.ch ? 1 : 0));   // ordem total: igual nos dois aparelhos
+    out.historico = hist.slice(0, HIST_MAX).map(x => x.h);
 
     const agora = Date.now();
     for (const k of Object.keys(del)) if (agora - del[k] > SYNC_TOMB_TTL) delete del[k];
     for (const k of Object.keys(add)) if (!del[k] && agora - add[k] > SYNC_TOMB_TTL) delete add[k];
-    out.del = del; out.add = add;
+    out.del = del; out.add = add; out.ts = ts;
     out._histClear = corte;
     out._syncTs = Math.max(L._syncTs || 0, R._syncTs || 0);
     return normalizarAppData(out);
@@ -1899,7 +2149,7 @@ function mesclarAppData(remoto, local) {
 function _syncColecoesNaoRegistradas() {
     const base = normalizarAppData({});
     const reg  = new Set([...SYNC_COLECOES, ...SYNC_CONJUNTOS, ...SYNC_MAPAS, ...SYNC_CONFIGS, ...SYNC_LOGS]);
-    const meta = new Set(['del', 'add', '_syncTs', '_histClear', '_v']);
+    const meta = new Set(['del', 'add', 'ts', '_syncTs', '_histClear', '_v']);
     const falta = [];
     for (const k of Object.keys(base)) {
         const v = base[k];
@@ -1938,7 +2188,12 @@ function rebuildFormSelects() {
     const prevCat = catEl.value;
     catEl.innerHTML = catOpts;
     if (prevCat && [...catEl.options].some(o => o.value === prevCat)) catEl.value = prevCat;
-    document.getElementById('editCategoria').innerHTML = catOpts;
+    // O modal de edição pode estar aberto quando a nuvem funde: sem preservar a escolha, a
+    // categoria voltaria à primeira opção e o salvar a trocaria sem ninguém pedir.
+    const editCatEl = document.getElementById('editCategoria');
+    const prevEditCat = editCatEl.value;
+    editCatEl.innerHTML = catOpts;
+    if (prevEditCat && [...editCatEl.options].some(o => o.value === prevEditCat)) editCatEl.value = prevEditCat;
 
     rebuildDescricoesDatalist();
     toggleFormFields();
@@ -1958,7 +2213,7 @@ function _recordDescricao(nome) {
     // _syncCarimbar: no aparelho que ainda não puxou a remoção a string continua no array
     // (logo, no _snapSync), e sem este `add` o merge a apagaria de novo.
     _descDestombar(low);
-    appData.add['desc:' + nome] = Date.now();
+    appData.add['desc:' + nome] = _syncAgora();
     rebuildDescricoesDatalist(); // reflete a nova descrição no autocomplete já nesta sessão
 }
 // Sugestão removida = tombstone do sync (`del['desc:<nome>']`, §15/SYNC_CONJUNTOS): a remoção
@@ -1991,7 +2246,7 @@ function _descSugestoes() {
 function removerDescricao(nome) {
     const low = String(nome || '').trim().toLowerCase();
     if (!low) return;
-    const agora = Date.now();
+    const agora = _syncAgora();
     if (!appData.del) appData.del = {};
     appData.del['desc:' + nome] = agora;
     (appData.descricoes || []).forEach(d => { if ((d || '').toLowerCase() === low) appData.del['desc:' + d] = agora; });
@@ -2002,7 +2257,7 @@ function limparDescricoes() {
     const lista = _descSugestoes();
     if (!lista.length) { toast('Não há sugestões para limpar.', 'info'); return; }
     showConfirm(`Remover as ${lista.length} sugestões de descrição? Os lançamentos NÃO são afetados — some só o autocomplete.`, () => {
-        const agora = Date.now();
+        const agora = _syncAgora();
         if (!appData.del) appData.del = {};
         lista.forEach(n => { appData.del['desc:' + n] = agora; });
         (appData.descricoes || []).forEach(d => { appData.del['desc:' + d] = agora; });
@@ -2058,7 +2313,7 @@ function toast(msg, type = 'success') {
     const icons = { success: '✓', error: '✗', info: 'ℹ', warning: '⚠' };
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;
-    el.innerHTML = `<span class="toast-icon">${icons[type] || '●'}</span><span>${msg}</span>`;
+    el.innerHTML = `<span class="toast-icon">${icons[type] || '●'}</span><span>${esc(msg)}</span>`;
     document.getElementById('toastContainer').appendChild(el);
     requestAnimationFrame(() => el.classList.add('show'));
     const t = setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 350); }, TOAST_DURATION);
@@ -2103,15 +2358,22 @@ document.getElementById('confirmModal').onclick = function(e) {
 // ============================================================
 // EDIT MODAL
 // ============================================================
+function _colecaoDoTipo(tipo) {
+    return tipo === 'fatura' ? appData.faturas
+         : tipo === 'fixa'   ? appData.fixas
+         : tipo === 'divida' ? appData.dividas
+         : tipo === 'rendaExtra' ? appData.rendasExtras
+         : appData.rendas;
+}
+// O modal pode ficar aberto enquanto a nuvem funde e tira um item de cima: a posição guardada
+// passaria a apontar para OUTRO lançamento. Por isso quem salva localiza pelo id.
+let _editandoId = null;
 function editarItem(tipo, index) {
-    const data = tipo === 'fatura' ? appData.faturas[index]
-               : tipo === 'fixa'   ? appData.fixas[index]
-               : tipo === 'divida' ? appData.dividas[index]
-               : tipo === 'rendaExtra' ? appData.rendasExtras[index]
-               : appData.rendas[index];
+    const data = _colecaoDoTipo(tipo)[index];
+    if (!data) return;
+    _editandoId = data.id;
 
     document.getElementById('editTipo').value  = tipo;
-    document.getElementById('editIndex').value = index;
     document.getElementById('editNome').value  = data.name;
     document.getElementById('editValor').value = data.amount;
 
@@ -2143,7 +2405,13 @@ document.getElementById('editCancelBtn').onclick = () => document.getElementById
 document.getElementById('editModal').onclick = function(e) { if (e.target === this) this.classList.add('hidden'); };
 document.getElementById('editSaveBtn').onclick = () => {
     const tipo  = document.getElementById('editTipo').value;
-    const index = parseInt(document.getElementById('editIndex').value);
+    const index = _colecaoDoTipo(tipo).findIndex(x => String(x.id) === String(_editandoId));
+    if (index < 0) {
+        document.getElementById('editModal').classList.add('hidden');
+        toast('Este lançamento foi removido em outro aparelho.', 'warning');
+        processarDadosERenderizar();
+        return;
+    }
     const nome  = document.getElementById('editNome').value.trim();
     const valor = parseFloat(document.getElementById('editValor').value);
     const editNomeEl  = document.getElementById('editNome');
@@ -2160,6 +2428,7 @@ document.getElementById('editSaveBtn').onclick = () => {
     else if (tipo === 'fatura') {
         const curr  = parseInt(document.getElementById('editCurr').value);
         const total = parseInt(document.getElementById('editTotal').value);
+        if (!(curr >= 1) || !(total >= 1)) { document.getElementById('editCurr').classList.add('field-error'); toast('Informe a parcela atual e o total (mínimo 1).', 'error'); return; }
         if (curr > total) { document.getElementById('editCurr').classList.add('field-error'); toast('Parcela atual não pode ser maior que o total.', 'error'); return; }
         const diaEditTxt = document.getElementById('editDia').value.trim();
         const diaEdit    = _diaValido(diaEditTxt);
@@ -2328,8 +2597,8 @@ function renderMetasModal() {
                 <div class="flex gap-1 flex-shrink-0">
                     <input type="number" min="0" step="100" value="${m.acumulado}" placeholder="Acumulado" title="Valor acumulado"
                         class="w-24 px-2 py-1 text-xs border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-yellow-400"
-                        onchange="atualizarAcumulado(${m.id}, this.value)">
-                    <button onclick="removerMeta(${m.id})" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
+                        onchange="atualizarAcumulado('${escJs(m.id)}', this.value)">
+                    <button onclick="removerMeta('${escJs(m.id)}')" class="action-btn text-red-300 hover:text-red-600" title="Remover">✕</button>
                 </div>
             </div>
         </div>`;
@@ -2353,14 +2622,14 @@ function adicionarMeta() {
 
 function removerMeta(id) {
     showConfirm('Deseja remover esta meta?', () => {
-        appData.metas = appData.metas.filter(m => m.id !== id);
+        appData.metas = appData.metas.filter(m => String(m.id) !== String(id));
         salvarDados(); renderMetasModal(); renderMetasSection();
         toast('Meta removida.', 'warning');
     });
 }
 
 function atualizarAcumulado(id, valor) {
-    const m = appData.metas.find(m => m.id === id);
+    const m = appData.metas.find(m => String(m.id) === String(id));
     if (m) { m.acumulado = parseFloat(valor) || 0; salvarDados(); renderMetasSection(); }
 }
 
@@ -2419,8 +2688,9 @@ if (_saved) {
 _syncSnapshot();   // base dos carimbos de sync (o que já estava salvo não conta como mudança)
 
 function salvarDados() {
-    _syncCarimbar();   // id/updatedAt do que mudou + tombstone do que sumiu (guia §15 · r66a)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    _syncCarimbar();   // id/updatedAt/ts do que mudou + tombstone do que sumiu (guia §15 · r66a)
+    _syncPendente = true;
+    _gravarLocal();
     salvarNoSupabase();
 }
 
@@ -2431,13 +2701,13 @@ async function inicializar() {
     applyFormDefaults();
     atualizarBotoesPIN();
     if (_pinAtivo()) bloquearDashboard();
-    if (SUPA_URL && SUPA_KEY) {
-        const ok = await carregarDoSupabase();
-        if (ok) { processarDadosERenderizar(); _resetMesForm(); return; }
-    }
     if (!SUPA_URL) setSupaStatus('disconnected', 'Offline');
+    // O que já está salvo aqui aparece primeiro: Supabase pausado ou rede ruim não deixam a
+    // tela vazia. Se a nuvem trouxer novidade, _sincronizarAgora redesenha.
     processarDadosERenderizar();
     _resetMesForm();
+    _ligarChecagemDaNuvem();
+    if (SUPA_URL && SUPA_KEY) await carregarDoSupabase();
 }
 
 // O mês do filtro superior é o CONTEXTO do app: o formulário nasce nele, para
@@ -2562,8 +2832,8 @@ function preencherDiaHoje() {
 // carimbo do histórico é a hora em que se DIGITOU, não a da compra. Inventar
 // data seria pior que não ter. Então: preenchimento manual, mês a mês, numa
 // tela só — o que o mês em tela não cobrir fica para depois, sem bloquear nada.
-// Índice ORIGINAL vai junto: a lista é filtrada, e gravar por posição da lista
-// escreveria na fatura errada.
+// O campo leva o ID da compra: a lista é filtrada e o modal fica aberto enquanto a nuvem
+// pode fundir, então gravar por posição escreveria na fatura errada.
 function _faturasSemData(mes) {
     return (appData.faturas || [])
         .map((f, i) => ({ f, i }))
@@ -2589,7 +2859,7 @@ function renderDatasModal() {
     document.getElementById('datasMesRotulo').textContent = mes;
     document.getElementById('datasLista').innerHTML = itens.length
         ? itens.map(x => `<div class="flex items-center gap-2 py-1.5 border-b border-gray-100">
-            <input type="number" min="1" max="31" step="1" placeholder="—" data-fat="${x.i}"
+            <input type="number" min="1" max="31" step="1" placeholder="—" data-fat="${esc(x.f.id)}"
                    class="datas-dia w-16 px-2 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-400 flex-shrink-0">
             <div class="min-w-0 flex-1">
                 <div class="text-sm font-medium truncate">${esc(x.f.name)}</div>
@@ -2615,8 +2885,8 @@ function salvarDatas() {
     campos.forEach(el => {
         const dia = _diaValido(el.value);
         if (!dia) return;                                  // vazio = continua sem data, sem erro
-        const idx = parseInt(el.getAttribute('data-fat'), 10);
-        if (appData.faturas[idx]) { appData.faturas[idx].dia = dia; n++; }
+        const fat = appData.faturas.find(f => String(f.id) === el.getAttribute('data-fat'));
+        if (fat) { fat.dia = dia; n++; }
     });
     if (!n) { toast('Nenhuma data preenchida.', 'info'); return; }
     salvarDados();
@@ -2710,10 +2980,10 @@ function importarDados(event) {
             appData = normalizarAppData(imported);
             _syncCarimbar();    // tombstona o que existia e NÃO veio no backup (import é autoritativo)
             _syncRestaurar();   // recarimba o importado p/ nenhum tombstone antigo reapagá-lo (guia §15)
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+            _gravarLocal();
             rebuildFormSelects();
             processarDadosERenderizar();
-            if (SUPA_URL && SUPA_KEY) { toast('Importado! Enviando ao Supabase...', 'info'); await salvarNoSupabase(); toast('Dados enviados ao Supabase!', 'success'); }
+            if (SUPA_URL && SUPA_KEY) { toast('Importado! Enviando ao Supabase...', 'info'); const enviado = await salvarNoSupabase(); toast(enviado ? 'Dados enviados ao Supabase!' : 'Importado neste aparelho — o envio à nuvem falhou e será repetido.', enviado ? 'success' : 'warning'); }
             else toast('Backup importado com sucesso!', 'success');
         } catch { toast('Erro ao ler o arquivo — verifique se é um JSON válido.', 'error'); }
     };
@@ -2729,8 +2999,7 @@ let _lastUndoToast  = null;
 // de vez continua disponível para o caso de lançamento por engano.
 function removerItem(tipo, index) {
     if (tipo === 'fixa' || tipo === 'renda') {
-        const col  = tipo === 'fixa' ? appData.fixas : appData.rendas;
-        const item = col[index];
+        const item = _colecaoDoTipo(tipo)[index];
         if (!item) return;
         const mes  = _mesPadraoForm();
         const ant  = _mesAnterior(mes);
@@ -2740,12 +3009,16 @@ function removerItem(tipo, index) {
         showConfirm(
             `Encerrar "${item.name}"? Deixa de contar a partir de ${mes} — ${ant} e os meses anteriores ficam intactos.`,
             () => {
-                col[index] = { ...item, fim: ant };
+                // Relocaliza AGORA: se a nuvem fundiu com a confirmação aberta, `appData` é outro
+                // objeto e gravar na coleção antiga não teria efeito nenhum (só no histórico).
+                const col = _colecaoDoTipo(tipo), i = col.findIndex(x => String(x.id) === String(item.id));
+                if (i < 0) { toast(`"${item.name}" já foi removido em outro aparelho.`, 'warning'); processarDadosERenderizar(); return; }
+                col[i] = { ...col[i], fim: ant };
                 logHistorico('editar', tipo, `${item.name} encerrada em ${ant}`, item.amount);
                 salvarDados(); processarDadosERenderizar();
                 toast(`"${item.name}" não conta mais a partir de ${mes}.`, 'warning');
             },
-            { ok: 'Encerrar', alt: 'Apagar de vez', onAlt: () => _apagarRecorrente(tipo, index) }
+            { ok: 'Encerrar', alt: 'Apagar de vez', onAlt: () => { const i = _colecaoDoTipo(tipo).findIndex(x => String(x.id) === String(item.id)); if (i >= 0) _apagarRecorrente(tipo, i); } }
         );
         return;
     }
@@ -2862,6 +3135,7 @@ document.getElementById('addExpenseForm').addEventListener('submit', function(e)
     } else if (isCard) {
         const curr  = parseInt(document.getElementById('newCurr').value);
         const total = parseInt(document.getElementById('newTotal').value);
+        if (!(curr >= 1) || !(total >= 1)) { setFieldError('newCurr', 'Informe a parcela e o total (mínimo 1).'); return; }
         if (curr > total) { setFieldError('newCurr', 'Parcela atual > total.'); return; }
         const diaEl  = document.getElementById('newDia');
         const diaTxt = diaEl ? diaEl.value.trim() : '';
@@ -2978,14 +3252,17 @@ function setPagOffset(offset) {
     renderPagamentos();
 }
 
-function _getPag(mes) {
+// Leitura NÃO cria a entrada: o render rodava isto e publicava mês vazio na nuvem.
+function _getPag(mes) { return appData.pagamentos[mes] || { fixas: [], cartoes: [] }; }
+function _getPagEscrita(mes) {
     if (!appData.pagamentos[mes]) appData.pagamentos[mes] = { fixas: [], cartoes: [] };
     return appData.pagamentos[mes];
 }
 
 function togglePagFixa(idx) {
+    if (!appData.fixas[idx]) return;
     const mes = _getMesPag();
-    const p = _getPag(mes);
+    const p = _getPagEscrita(mes);
     const nome = appData.fixas[idx].name;
     const i = p.fixas.indexOf(nome);
     if (i >= 0) p.fixas.splice(i, 1); else p.fixas.push(nome);
@@ -2994,7 +3271,7 @@ function togglePagFixa(idx) {
 
 function togglePagCartao(cartao) {
     const mes = _getMesPag();
-    const p = _getPag(mes);
+    const p = _getPagEscrita(mes);
     const i = p.cartoes.indexOf(cartao);
     if (i >= 0) p.cartoes.splice(i, 1); else p.cartoes.push(cartao);
     salvarDados(); renderPagamentos();
@@ -3019,10 +3296,13 @@ function renderPagamentos() {
 
     // Fixas
     let fixasHtml = '';
-    if (!appData.fixas.length) {
-        fixasHtml = '<p class="text-xs text-gray-400 italic px-2 py-1">Nenhuma despesa fixa cadastrada</p>';
+    // Só o que vale NESTE mês (v4.18.0): sem o filtro, a despesa encerrada seguia cobrando e o
+    // item dividido por "alterar a partir de" aparecia duas vezes, somando em dobro no quitado.
+    const fixasDoMes = appData.fixas.map((f, i) => ({ f, i })).filter(x => idx < 0 || _vigenteNoMes(x.f, idx));
+    if (!fixasDoMes.length) {
+        fixasHtml = '<p class="text-xs text-gray-400 italic px-2 py-1">Nenhuma despesa fixa neste mês</p>';
     } else {
-        appData.fixas.forEach((f, i) => {
+        fixasDoMes.forEach(({ f, i }) => {
             const pago = p.fixas.includes(f.name);
             totalGeral += f.amount;
             if (pago) totalPago += f.amount;
@@ -3183,7 +3463,7 @@ function processarDadosERenderizar() {
     fs.innerHTML = '<option value="Todos">Todos os Tipos</option>';
     getCategorias().forEach(cat => {
         if (activeCats.includes(cat) || processedData.length === 0)
-            fs.insertAdjacentHTML('beforeend', `<option value="${cat}">${cat}</option>`);
+            fs.insertAdjacentHTML('beforeend', `<option value="${esc(cat)}">${esc(cat)}</option>`);
     });
     if ([...fs.options].some(o => o.value === prevStore)) fs.value = prevStore;
 
@@ -3324,17 +3604,17 @@ function renderDashboard() {
 
     // Tables — daqui (e não de processarDadosERenderizar) porque as tabelas por mês
     // têm de acompanhar o filtro do topo, que chama só o renderDashboard.
-    renderRendasTable(selectedMonthIndex);
-    renderFixasTable(selectedMonthIndex);
-    renderBotaoDatas();
-    renderDividasTable(selectedMonthIndex);
-    renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTotals, selectedMonthIndex);
+    _safeRender(() => renderRendasTable(selectedMonthIndex), 'rendas');
+    _safeRender(() => renderFixasTable(selectedMonthIndex), 'fixas');
+    _safeRender(() => renderBotaoDatas(), 'botaoDatas');
+    _safeRender(() => renderDividasTable(selectedMonthIndex), 'dividas');
+    _safeRender(() => renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTotals, selectedMonthIndex), 'faturas');
 
     // Pagamentos
-    renderPagamentos();
+    _safeRender(() => renderPagamentos(), 'pagamentos');
 
     // Planejamento de quitação (simulador)
-    renderPlanejamento();
+    _safeRender(() => renderPlanejamento(), 'planejamento');
 }
 
 function renderAlertBanner(categoryTotals, mesRef) {
@@ -3381,7 +3661,7 @@ function renderBarChart(monthlyFaturasTotals, monthlyDividasTotals) {
             responsive: true, maintainAspectRatio: false,
             scales: {
                 x: { stacked: true, ticks: { color: txtColor }, grid: { color: gridColor } },
-                y: { stacked: true, beginAtZero: true, ticks: { color: txtColor, callback: v => 'R$' + (v/1000).toFixed(0) + 'k' }, grid: { color: gridColor } }
+                y: { stacked: true, beginAtZero: true, ticks: { color: txtColor, callback: _eixoMoeda }, grid: { color: gridColor } }
             },
             plugins: { legend: { labels: { color: txtColor, boxWidth: 12, font: { size: 11 } } }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + formatCurrency(c.raw) } } }
         }
@@ -3534,7 +3814,7 @@ function abrirComprasDoPonto(idx) {
         `${d.itens.length} ${d.itens.length === 1 ? 'lançamento' : 'lançamentos'} · valor da parcela que cai neste ${_comprasModo === 'mes' ? 'mês' : 'dia'}`;
     document.getElementById('comprasPontoLista').innerHTML = d.itens.map(x => `
         <div class="flex items-center gap-3 py-2">
-            <span style="width:8px;height:8px;border-radius:50%;background:${getColor(x.card)};display:inline-block;flex-shrink:0"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:${getColorCartao(x.card)};display:inline-block;flex-shrink:0"></span>
             <div class="min-w-0 flex-1">
                 <div class="text-sm font-medium truncate">${esc(x.name)}</div>
                 <div class="text-[11px] text-gray-400 truncate">${esc(x.card)} · ${esc(x.category || '—')}${x.total > 1 ? ` · parcela ${x.curr}/${x.total}` : ''}</div>
@@ -3594,7 +3874,7 @@ function renderComprasDiaChart() {
                 labels: monthNames,
                 datasets: cartoesM.map(card => ({
                     label: card, data: porCartaoM[card],
-                    backgroundColor: getColor(card), borderWidth: 0,
+                    backgroundColor: getColorCartao(card), borderWidth: 0,
                     borderRadius: { topLeft: 3, topRight: 3 }
                 }))
             },
@@ -3653,8 +3933,8 @@ function renderComprasDiaChart() {
                 let soma = 0;
                 const serie = acumulado ? porCartao[card].map(v => (soma += v)) : porCartao[card];
                 return acumulado
-                    ? { label: card, data: serie, borderColor: getColor(card), backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, stepped: true }
-                    : { label: card, data: serie, backgroundColor: getColor(card), borderWidth: 0, borderRadius: { topLeft: 3, topRight: 3 } };
+                    ? { label: card, data: serie, borderColor: getColorCartao(card), backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, stepped: true }
+                    : { label: card, data: serie, backgroundColor: getColorCartao(card), borderWidth: 0, borderRadius: { topLeft: 3, topRight: 3 } };
             })
         },
         options: {
@@ -3721,7 +4001,7 @@ function renderCategoryTrendChart(monthlyDividasTotals) {
             responsive: true, maintainAspectRatio: false,
             scales: {
                 x: { ticks: { color: txtColor, font: { size: 10 } }, grid: { color: gridColor } },
-                y: { beginAtZero: true, ticks: { color: txtColor, callback: v => 'R$' + (v / 1000).toFixed(1) + 'k' }, grid: { color: gridColor } }
+                y: { beginAtZero: true, ticks: { color: txtColor, callback: _eixoMoeda }, grid: { color: gridColor } }
             },
             plugins: {
                 legend: { labels: { color: txtColor, boxWidth: 10, font: { size: 10 } } },
@@ -3778,7 +4058,7 @@ function renderWaterfallChart(valorFaturaRef, valorDividaRef, mesRef, rendaExtra
             },
             scales: {
                 x: { ticks: { color: txtColor }, grid: { display: false } },
-                y: { ticks: { color: txtColor, callback: v => 'R$' + (v / 1000).toFixed(0) + 'k' }, grid: { color: gridColor } }
+                y: { ticks: { color: txtColor, callback: _eixoMoeda }, grid: { color: gridColor } }
             }
         }
     });
@@ -3943,7 +4223,7 @@ function renderDividasTable(selectedMonthIndex) {
         const si = item.mesInicio ? monthNames.indexOf(item.mesInicio) : 0;
         if (selectedMonthIndex === -1 || si === selectedMonthIndex) {
             html += `<tr class="hover:bg-red-50 text-gray-700">
-                <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)} <span class="text-xs text-red-400">(${item.mesInicio || monthNames[HISTORY_COUNT]})</span></td>
+                <td class="px-2 py-2 whitespace-nowrap">${esc(item.name)} <span class="text-xs text-red-400">(${esc(item.mesInicio || monthNames[HISTORY_COUNT])})</span></td>
                 <td class="px-2 py-2 whitespace-nowrap text-right font-medium text-red-600">${formatCurrency(item.amount)}</td>
                 <td class="px-1 py-2 text-center w-16">
                     <button onclick="editarItem('divida',${item._i})" class="action-btn text-blue-400 hover:text-blue-700" title="Editar">✎</button>
@@ -4000,7 +4280,7 @@ function renderFaturasTable(filteredData, monthlyFaturasTotals, monthlyDividasTo
                     <div class="font-medium">${esc(item.category)}</div>
                     <div class="text-xs text-gray-400 uppercase">${esc(item.name)}</div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-center fat-s3">${item.curr}/${item.total}</td>`;
+                <td class="px-4 py-3 whitespace-nowrap text-center fat-s3">${esc(item.curr)}/${esc(item.total)}</td>`;
             item.projections.forEach((val, i) => {
                 const hl = i === selectedMonthIndex ? 'bg-indigo-50' : '';
                 row += `<td class="px-4 py-3 whitespace-nowrap text-right ${val > 0 ? 'font-medium' : 'text-gray-300'} ${hl}">${val > 0 ? formatCurrency(val) : '-'}</td>`;
@@ -4109,7 +4389,7 @@ function _planDrawChart(r) {
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + formatCurrency(c.raw) } } },
             scales: {
                 x: { ticks: { color: txt, font: { size: 10 } }, grid: { color: grid } },
-                y: { ticks: { color: txt, callback: v => 'R$' + (v / 1000).toFixed(1) + 'k' }, grid: { color: grid } }
+                y: { ticks: { color: txt, callback: _eixoMoeda }, grid: { color: grid } }
             }
         }
     });
@@ -4350,13 +4630,13 @@ function removerPin() {
 // ── HISTÓRICO ──────────────────────────────────────────────
 const HIST_MAX = 150;
 const TIPO_LABEL = { fatura:'Cartão', fixa:'Fixa', divida:'Dívida', renda:'Renda', rendaExtra:'Renda Extra' };
-const ACAO_CLASS  = { add:'hist-add', edit:'hist-edit', remove:'hist-remove', dup:'hist-dup' };
-const ACAO_LABEL  = { add:'Adicionado', edit:'Editado', remove:'Removido', dup:'Duplicado' };
+const ACAO_CLASS  = { add:'hist-add', edit:'hist-edit', editar:'hist-edit', remove:'hist-remove', dup:'hist-dup' };
+const ACAO_LABEL  = { add:'Adicionado', edit:'Editado', editar:'Editado', remove:'Removido', dup:'Duplicado' };
 
 function logHistorico(acao, tipo, nome, valor = null) {
     if (!appData.historico) appData.historico = [];
     const ts = new Date().toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
-    appData.historico.unshift({ ts, acao, tipo, nome, valor, _t: Date.now() }); // _t = carimbo comparável no merge
+    appData.historico.unshift({ ts, acao, tipo, nome, valor, _t: _syncAgora() }); // _t = carimbo comparável no merge
     if (appData.historico.length > HIST_MAX) appData.historico.length = HIST_MAX;
     salvarDados();
 }
@@ -4368,9 +4648,9 @@ function abrirHistorico() {
         tbody.innerHTML = `<tr><td colspan="4" class="text-center text-gray-400 py-6 italic text-xs">Nenhuma alteração registrada.</td></tr>`;
     } else {
         tbody.innerHTML = hist.map(h => `<tr>
-            <td class="text-gray-500 whitespace-nowrap">${h.ts}</td>
-            <td><span class="hist-badge ${ACAO_CLASS[h.acao] || ''}">${ACAO_LABEL[h.acao] || h.acao}</span></td>
-            <td class="text-gray-600 capitalize">${TIPO_LABEL[h.tipo] || h.tipo}</td>
+            <td class="text-gray-500 whitespace-nowrap">${esc(h.ts)}</td>
+            <td><span class="hist-badge ${ACAO_CLASS[h.acao] || ''}">${esc(ACAO_LABEL[h.acao] || h.acao)}</span></td>
+            <td class="text-gray-600 capitalize">${esc(TIPO_LABEL[h.tipo] || h.tipo)}</td>
             <td class="text-gray-700 font-medium">${esc(h.nome)}</td>
             <td class="text-gray-700 whitespace-nowrap text-right">${h.valor != null ? formatCurrency(h.valor) : '-'}</td>
         </tr>`).join('');
@@ -4381,7 +4661,7 @@ function abrirHistorico() {
 function limparHistorico() {
     if (!confirm('Limpar todo o histórico?')) return;
     appData.historico = [];
-    appData._histClear = Date.now();   // senão o log volta do outro aparelho na próxima fusão
+    appData._histClear = _syncAgora();   // senão o log volta do outro aparelho na próxima fusão
     salvarDados();
     abrirHistorico();
     toast('Histórico limpo.', 'info');
@@ -4989,18 +5269,36 @@ function invOnTipoChange() {
 // Salva as taxas de referência (CDI/Selic/IPCA) editadas pelo usuário
 function invSalvarConfig() {
     const c = appData.investimentos.config;
-    const cdi   = parseFloat(document.getElementById('invCfgCdi').value);
-    const selic = parseFloat(document.getElementById('invCfgSelic').value);
-    const ipca  = parseFloat(document.getElementById('invCfgIpca').value);
-    if (!isNaN(cdi))   c.cdiAnual   = cdi / 100;
-    if (!isNaN(selic)) c.selicAnual = selic / 100;
-    if (!isNaN(ipca))  c.ipcaAnual  = ipca / 100;
+    // Só grava o campo que mudou de verdade. Regravar os três com o que está na tela devolvia,
+    // com carimbo novo, o valor arredondado (ou velho) das taxas que ninguém tocou.
+    INV_CFG.forEach(([id, campo]) => {
+        const el = document.getElementById(id), v = parseFloat(el.value);
+        if (!isNaN(v) && el.value !== (c[campo] * 100).toFixed(2)) c[campo] = v / 100;
+    });
     salvarDados();
-    // produtos 'fixo' (poupança/Selic) exibem a taxa derivada — atualiza o campo
-    const prod = invProdutos()[document.getElementById('invTipo').value];
-    if (prod.rateType === 'fixo') document.getElementById('invTaxa').value = (prod.taxaAnual * 100).toFixed(2);
+    invAtualizarTaxaDerivada();
     invRenderResultado();
     invRenderComparar();
+}
+
+// produtos 'fixo' (poupança/Selic) exibem a taxa derivada — atualiza o campo
+function invAtualizarTaxaDerivada() {
+    const prod = invProdutos()[document.getElementById('invTipo').value];
+    if (prod && prod.rateType === 'fixo') document.getElementById('invTaxa').value = (prod.taxaAnual * 100).toFixed(2);
+}
+const INV_CFG = [['invCfgCdi', 'cdiAnual'], ['invCfgSelic', 'selicAnual'], ['invCfgIpca', 'ipcaAnual']];
+function invPreencherTaxas() {
+    const c = appData.investimentos.config;
+    INV_CFG.forEach(([id, campo]) => {
+        const el = document.getElementById(id);
+        if (el && document.activeElement !== el) el.value = (c[campo] * 100).toFixed(2);   // não atropela quem digita
+    });
+}
+// A fusão trouxe outra taxa ou outro cenário: os campos e a lista precisam acompanhar.
+function _invSincronizarCampos() {
+    invPreencherTaxas();
+    invAtualizarTaxaDerivada();
+    if (_activeContext === 'investir') invRenderAll(); else invRenderCenarios();
 }
 
 function invSetPrazo(meses) { document.getElementById('invPrazo').value = meses; invOnInput(); }
@@ -5084,7 +5382,7 @@ function invDrawChart(r, p) {
             },
             scales: {
                 x: { title: { display: true, text: 'Meses', color: t.txt }, grid: { color: t.grid }, ticks: { color: t.txt, maxTicksLimit: 12 } },
-                y: { grid: { color: t.grid }, ticks: { color: t.txt, callback: v => 'R$ ' + (v / 1000).toFixed(0) + 'k' } }
+                y: { grid: { color: t.grid }, ticks: { color: t.txt, callback: _eixoMoeda } }
             }
         }
     });
@@ -5128,7 +5426,7 @@ function invRenderComparar() {
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => formatCurrency(c.parsed.y) } } },
-            scales: { x: { ticks: { color: t.txt, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: t.txt, callback: v => 'R$ ' + (v / 1000).toFixed(0) + 'k' }, grid: { color: t.grid } } }
+            scales: { x: { ticks: { color: t.txt, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: t.txt, callback: _eixoMoeda }, grid: { color: t.grid } } }
         }
     });
 }
@@ -5211,7 +5509,7 @@ function invSalvarCenario() {
 
 function invExcluirCenario(id) {
     showConfirm('Excluir este cenário?', () => {
-        appData.investimentos.cenarios = appData.investimentos.cenarios.filter(c => c.id !== id);
+        appData.investimentos.cenarios = appData.investimentos.cenarios.filter(c => String(c.id) !== String(id));
         salvarDados();
         invRenderCenarios();
         toast('Cenário excluído', 'info');
@@ -5236,7 +5534,7 @@ function invRenderCenarios() {
             </div>
             <div class="text-right flex-shrink-0">
                 <p class="text-sm font-bold" style="color:${prod ? prod.cor : '#6366f1'}">${formatCurrency(c.resultado.liquido)}</p>
-                <button onclick="invExcluirCenario(${c.id})" class="text-xs text-gray-300 hover:text-red-500">excluir</button>
+                <button onclick="invExcluirCenario('${escJs(c.id)}')" class="text-xs text-gray-300 hover:text-red-500">excluir</button>
             </div>
         </div>`;
     }).join('');
@@ -5255,10 +5553,8 @@ function initInvestimentos() {
         if (el) el.addEventListener('input', invOnInput);
     });
     // taxas de referência (CDI/Selic/IPCA)
-    const _c = appData.investimentos.config;
-    const _setPct = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v * 100).toFixed(2); };
-    _setPct('invCfgCdi', _c.cdiAnual); _setPct('invCfgSelic', _c.selicAnual); _setPct('invCfgIpca', _c.ipcaAnual);
-    ['invCfgCdi', 'invCfgSelic', 'invCfgIpca'].forEach(id => {
+    invPreencherTaxas();
+    INV_CFG.forEach(([id]) => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', invSalvarConfig);
     });

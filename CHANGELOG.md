@@ -5,6 +5,52 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.22.0] — Novembro 2026
+
+> **O que fazer depois de atualizar:** feche e abra o app **em cada aparelho** (computador, celular, outras janelas). Janela aberta desde antes continua rodando a versão anterior até ser recarregada. Não precisa rodar nada no Supabase.
+>
+> **O que não volta sozinho:** alterações perdidas antes desta versão não estão guardadas em lugar nenhum do app. Confira limites, contas marcadas como pagas, "trazer déficit", planejamento de quitação e taxas de investimento, e refaça o que estiver faltando. Daqui em diante elas não somem mais assim.
+
+### 🐛 Correções
+- **Alterações sumiam entre aparelhos.** Quem editava num computador e abria o app em outro podia ver a alteração desaparecer **dos dois**, com a tela dizendo "Sincronizado". Acontecia com **limite de categoria, conta marcada como paga, "trazer déficit", planejamento de quitação e taxas de investimento**, sempre que outro aparelho tivesse aberto o app desde a última sincronização deste. A causa: esses dados eram decididos por qual aparelho **sincronizou** por último, e não por qual **editou** por último. Agora cada um deles tem data própria, como os lançamentos já tinham.
+  - Dois aparelhos marcando contas diferentes do mesmo mês agora somam, e desmarcar também chega no outro.
+  - Dois aparelhos alterando campos diferentes do planejamento também somam.
+- **Computador com o relógio atrasado perdia a própria edição.** Bastavam alguns minutos de diferença entre os relógios para o valor recém-digitado ser descartado na hora. A data de uma alteração agora nunca fica atrás do que o aparelho já viu.
+- **Cópia antiga da nuvem entrava como se fosse nova.** Com a internet oscilando, o service worker devolvia a última resposta guardada como se a nuvem tivesse respondido, e o app fundia e podia gravar em cima dela. A conversa com a nuvem não passa mais pelo cache. Só os arquivos do app e as bibliotecas continuam disponíveis offline.
+- **Dois aparelhos gravando no mesmo instante:** o segundo apagava da nuvem o que o primeiro tinha acabado de enviar. Agora a gravação só é aceita se a nuvem ainda está como foi lida; se não estiver, o app lê de novo e funde.
+- **Janela aberta há horas ficava desatualizada.** Agora, ao voltar para ela (ou a cada minuto, enquanto visível), o app confere a nuvem e atualiza a tela sem recarregar. O conteúdo só desce quando há novidade. Se a nuvem trouxer algo durante um salvamento, a tela também acompanha.
+- **Abrir o app gravava na nuvem** mesmo sem nada para enviar. Agora só grava quando há o que gravar.
+- **Falha de leitura podia virar gravação:** uma resposta truncada da nuvem era tratada como "nuvem vazia", e o app gravava a cópia local por cima. Agora ele para e tenta depois.
+- **Salvar com uma janela de confirmação ou edição aberta enquanto a nuvem atualizava** podia não ter efeito ("Encerrar" só aparecia no histórico) ou, em raros casos, alterar o lançamento errado. Agora o app localiza o item pelo identificador, e avisa se ele foi removido em outro aparelho. O mesmo vale para "Preencher datas".
+- **Duas janelas do mesmo navegador** (aba e app instalado, por exemplo) podiam sobrescrever uma à outra. Agora uma recebe na hora o que a outra salvou.
+- **"Apagar todos os dados"** não chegava aos limites, pagamentos e planejamento do outro aparelho. Agora chega. **Importar backup** também passa a valer para eles.
+- **Mudar uma taxa de investimento regravava as outras** com o valor arredondado (ou antigo) que estava na tela. Agora só muda a taxa que você mexeu, e os campos acompanham o que vier do outro aparelho.
+- **Pagamentos listava despesas fora do mês.** Despesa encerrada ou que ainda não começou aparecia na lista e somava no total a quitar, e item alterado "a partir de um mês" contava em dobro. **O percentual quitado pode mudar por causa disso, e agora ele está certo.**
+- **Gráfico de compras por cartão:** todos os cartões saíam na mesma cor, sem como separar um do outro. Agora cada um tem a sua.
+- **Eixos dos gráficos** repetiam rótulos quando os valores eram baixos ("R$0k, R$0k, R$1k, R$1k"). Agora mostram o valor ("R$500", "R$1,5k").
+- **Parcela em branco** gravava uma compra que sumia dos cálculos e, depois, fazia o próprio app recusar o backup exportado. Agora o formulário pede o valor.
+- **Nome com caracteres especiais:** nome de categoria, cartão ou lançamento com `<` ou aspas podia virar HTML nos avisos e quebrar o filtro de categoria. Agora aparece como texto.
+- Meta ou cenário com identificador de texto (vindo de sincronização) deixava os botões sem efeito; item com valor vazio (backup editado à mão) podia derrubar a tela; "Importar backup" dizia ter enviado à nuvem mesmo quando o envio falhava; a tela de configuração dizia "Conectado" quando a conexão falhava; a ação "editar" aparecia sem rótulo no histórico; erro de script a cada abertura por causa da ordem de carregamento do Tailwind.
+
+### 🔧 Melhorado
+- **A tela não espera a rede para abrir:** o que está salvo no aparelho aparece primeiro, e a nuvem atualiza em seguida se houver novidade.
+- **App aberto na virada do mês** agora recarrega ao voltar para ele, em vez de continuar tratando o mês anterior como "mês atual" e lançar no mês errado.
+- Sem rede presa: uma sincronização que não responde em 20 segundos desiste e tenta depois, sem segurar as próximas.
+- `keep-alive.yml` pinga agora os **dois** Supabase (compartilhado + pessoal), em passos separados com `if: always()`, chaves só por `env` e secret ausente tratado como falha (guia r86a)
+- README: instrução de instalação no **Mac** (Safari e Chrome/Edge), que faltava
+- `update-version.sh` passa a funcionar também no Windows (Git Bash), não só no macOS
+
+### 🆕 Adicionado
+- Testes (`tests/smoke-sync.js`, rodando a cada push): cenários de dois aparelhos para cada tipo de dado, relógios fora de sincronia, corrida de gravação, volta à janela aberta, leitura ruim, service worker executado de verdade e a linha que o próprio SQL do app cria. Relógio injetável (`SMOKE_AGORA`) para pegar teste que vence sozinho com o calendário
+- Smoke §35: seção 0 trava as 3 regras invioláveis da `apresentacao.html` (guia r84c) — 9 asserções estáticas com a lista de internals derivada do app; o mesmo arquivo passou a rodar sem jsdom (r57d)
+- `apresentacao.html`: seção "E o que o navegador busca fora" — bibliotecas de CDN e a imagem do QR de doação, nenhuma levando dado do usuário (guia r84a); e a descrição do algoritmo de sincronização atualizada
+
+### 📄 Documentação
+- `README.md`: removido o bloco que mandava agendar `pg_cron` contra a suspensão por inatividade — medido, **não evita** a suspensão (guia r88). No lugar, o comportamento real: usar o app mantém ativo · **Restore project** resolve · nada é apagado
+- `apresentacao.html`: nome de coluna interna saiu do texto público — violava a regra 2 do §37, e foi a nova asserção que pegou
+
+---
+
 ## [4.21.0] — Agosto 2026
 
 ### 🆕 Adicionado
