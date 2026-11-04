@@ -1174,6 +1174,11 @@ function secaoApresentacao() {
         const g0 = nuvem.gets, c0 = nuvem.checks;
         await voltarAoApp(M);
         check('sem novidade só lê o carimbo da linha, nunca o blob inteiro', nuvem.gets === g0 && nuvem.checks === c0 + 1, { blobs: nuvem.gets - g0, checagens: nuvem.checks - c0 });
+        // quem acabou de gravar já sabe o carimbo: não baixa de volta o que ele mesmo escreveu
+        lancar(M, 'Fixa', 'GravadaAqui', 10); await assentar(M);
+        const g2 = nuvem.gets, c2 = nuvem.checks;
+        await voltarAoApp(M);
+        check('logo depois de gravar, voltar ao app também só lê o carimbo da linha', nuvem.gets === g2 && nuvem.checks === c2 + 1, { blobs: nuvem.gets - g2, checagens: nuvem.checks - c2 });
         // aba escondida não fica consultando
         Object.defineProperty(M.w.document, 'hidden', { value: true, configurable: true });
         const c1 = nuvem.checks;
