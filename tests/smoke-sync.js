@@ -27,7 +27,13 @@ const path = require('path');
 let JSDOM = null, VirtualConsole = null;
 try { ({ JSDOM, VirtualConsole } = require('jsdom')); } catch (e) {}
 
-process.on('unhandledRejection', e => { erros.push('rejeição no Node: ' + (e && e.message)); });
+// Rejeição sem tratamento dentro do app (r126b/r156). Só o ouvinte do PROCESSO enxerga: o
+// `unhandledrejection` da janela nunca dispara no jsdom. E o Node só entrega o evento na fronteira
+// de macrotarefa — por isso o `drenar()` antes de cada seção e do placar: sem ele a rejeição cai no
+// nome da seção seguinte, ou some no `process.exit` do fim.
+let cenario = '(antes da 1ª seção)';
+process.on('unhandledRejection', e => { erros.push('[' + cenario + '] rejeição no Node: ' + (e && e.message)); });
+const drenar = () => new Promise(r => setImmediate(r));
 const ARQ      = process.argv[2];
 const BASELINE = process.argv.includes('--baseline');
 let ok = 0, fail = 0;
@@ -37,12 +43,22 @@ const check = (nome, cond, extra) => { if (cond) { ok++; console.log('  ✓ ' + 
 // se você só contar os ✗. Toda leitura de DOM/estado passa por aqui: erro vira ✗, não crash.
 const ler = (ap, expr) => { try { return ap.w.eval(expr); } catch (e) { return undefined; } };
 const txt = (ap, id) => ler(ap, `(document.getElementById('${id}')||{}).textContent`);
-const secao  = t => console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 58 - t.length)));
+const secao  = t => { cenario = t; console.log('\n── ' + t + ' ' + '─'.repeat(Math.max(0, 58 - t.length))); };
 
 // ─────────── "Supabase" compartilhado ───────────
 // Fala PostgREST de verdade onde o app depende disso: `updated_at` volta no formato do servidor
 // (com +00:00, que precisa de encodeURIComponent na URL), PATCH filtrado devolve [] quando a linha
 // mudou, e a escrita copia o corpo (r85a). `pagina` conta só leitura que trouxe o blob inteiro.
+// Contrato MEDIDO (r146a), PostgREST do Supabase compartilhado, 2026-11-26, leituras inofensivas:
+//   GET timestamptz → "2026-05-09T12:40:19.555458+00:00": "+00:00" no lugar de "Z" e fração SEM
+//     zeros à direita (gravado com ms ".500" volta ".5"; ".000" volta sem fração). O duplo escreve
+//     sempre 3 casas, e isso é equivalente AQUI: o app nunca monta nem normaliza essa string, só
+//     devolve a do servidor no filtro e compara servidor com servidor (_syncRev). Se um dia comparar
+//     com a própria data, o duplo tem de passar a cortar os zeros.
+//   PATCH sem GRANT → 401 {"code":"42501"} (app_pings). PATCH com corpo `{}` → 200 [] sem ir ao
+//     banco. O "200 [] quando o filtro não casa" não deu para medir no compartilhado (nenhuma tabela
+//     tem UPDATE ali); é o contrato documentado do PostgREST com return=representation, e o app o
+//     trata pelo CORPO (`[]` = conflito), não pelo r.ok.
 const nuvem = { payload: null, updated_at: null, gets: 0, checks: 0, posts: 0, patches: 0, conflitos: 0, get escritas() { return this.posts + this.patches; } };
 const clonar = o => JSON.parse(JSON.stringify(o));
 // Uma vez só: calculado por aparelho, cada um abriria com o relógio em SMOKE_AGORA e os abertos depois ficariam atrasados.
@@ -89,7 +105,6 @@ async function abrirAparelho(nome, cfg = {}) {
             w.structuredClone = o => JSON.parse(JSON.stringify(o));
             w.confirm = () => true; w.alert = () => {}; w.print = () => {};
             w.onerror = (msg) => { erros.push(nome + ' · onerror: ' + msg); };
-            w.addEventListener('unhandledrejection', e => erros.push(nome + ' · rejection: ' + (e.reason && e.reason.message)));
             w.fetch = async (url, options = {}) => {
                 const u = String(url), metodo = (options.method || 'GET').toUpperCase();
                 if (estado.offline) throw new Error('offline');
@@ -232,7 +247,7 @@ function secaoApresentacao() {
     }
 
     // ───────────────────────────────────────────────────────────
-    secao('1. Cenário do r68a — aparelho desatualizado grava por cima');
+    await drenar(); secao('1. Cenário do r68a — aparelho desatualizado grava por cima');
     const A = await abrirAparelho('PC');
     lancar(A, 'Renda', 'Salário', 5000);      await assentar(A);
     lancar(A, 'Fixa',  'Mercado', 200);       await assentar(A);
@@ -284,7 +299,7 @@ function secaoApresentacao() {
     if (BASELINE) { relatorio(); return; }
 
     // ───────────────────────────────────────────────────────────
-    secao('2. Exclusão — tombstone impede ressurreição (r66a)');
+    await drenar(); secao('2. Exclusão — tombstone impede ressurreição (r66a)');
     const idxMercado = ler(A, "appData.fixas.findIndex(x=>x.name==='Mercado')");
     ler(A, `removerItem('fixa', ${idxMercado})`); await assentar(A);
     check('PC removeu Mercado e a nuvem registrou o tombstone', !naNuvem('fixas').map(String).includes('Mercado') && Object.keys(nuvem.payload.del || {}).length > 0, { fixas: naNuvem('fixas'), del: Object.keys(nuvem.payload.del || {}).length });
@@ -294,7 +309,7 @@ function secaoApresentacao() {
     lancar(B, 'Renda', 'Freela', 300); await assentar(B);
     check('aparelho aberto com o item velho respeita o tombstone ao sincronizar', !naNuvem('fixas').includes('Mercado'), naNuvem('fixas'));
 
-    secao('3. Desfazer remoção revive (updatedAt > tombstone)');
+    await drenar(); secao('3. Desfazer remoção revive (updatedAt > tombstone)');
     const idxLuz = ler(A, "appData.fixas.findIndex(x=>x.name==='Luz')");
     ler(A, `removerItem('fixa', ${idxLuz})`); await assentar(A);
     ler(A, 'desfazerRemocao()');              await assentar(A);
@@ -303,7 +318,7 @@ function secaoApresentacao() {
     const E = await abrirAparelho('Celular4');
     check('aparelho novo vê a Luz restaurada', nomes(E, 'appData.fixas').includes('Luz'), nomes(E, 'appData.fixas'));
 
-    secao('4. Duplicar item — a cópia ganha id próprio');
+    await drenar(); secao('4. Duplicar item — a cópia ganha id próprio');
     const idxDup = ler(A, "appData.fixas.findIndex(x=>x.name==='Luz')");
     ler(A, `duplicarItem('fixa', ${idxDup})`); await assentar(A);
     check('PC tem Luz e Luz (cópia)', nomes(A, 'appData.fixas').includes('Luz (cópia)'), nomes(A, 'appData.fixas'));
@@ -311,7 +326,7 @@ function secaoApresentacao() {
     const F = await abrirAparelho('Celular5');
     check('a cópia chega íntegra no outro aparelho', nomes(F, 'appData.fixas').includes('Luz (cópia)') && ler(F, 'appData.fixas.length') === ler(A, 'appData.fixas.length'), { la: nomes(F, 'appData.fixas'), aqui: nomes(A, 'appData.fixas') });
 
-    secao('5. Edição concorrente — vence o updatedAt mais novo');
+    await drenar(); secao('5. Edição concorrente — vence o updatedAt mais novo');
     const G = await abrirAparelho('PC2');
     const iG = ler(G, "appData.rendas.findIndex(x=>x.name==='Salário')");
     ler(G, `appData.rendas[${iG}].amount = 5200; salvarDados();`); await assentar(G);
@@ -320,7 +335,7 @@ function secaoApresentacao() {
     ler(A, `appData.rendas[${iA}].amount = 5500; salvarDados();`); await assentar(A);
     check('a edição mais recente (5500) venceu na nuvem', (naNuvemObj('rendas').find(x => x.name === 'Salário') || {}).amount === 5500, naNuvemObj('rendas').map(x => x.name + '=' + x.amount));
 
-    secao('6. Conjuntos — categoria criada num aparelho, removida no outro');
+    await drenar(); secao('6. Conjuntos — categoria criada num aparelho, removida no outro');
     ler(B, "appData.categorias.push('Pets'); salvarDados();"); await assentar(B);
     check('categoria nova sobe para a nuvem', (nuvem.payload.categorias || []).includes('Pets'), nuvem.payload.categorias);
     const H = await abrirAparelho('Celular6');
@@ -330,7 +345,7 @@ function secaoApresentacao() {
     ler(B, "appData.rendas[0].amount = 5501; salvarDados();"); await assentar(B);   // B ainda tem 'Pets' localmente
     check('aparelho com a categoria velha não a ressuscita', !(nuvem.payload.categorias || []).includes('Pets'), nuvem.payload.categorias);
 
-    secao('7. Offline — não grava cego e não perde nada');
+    await drenar(); secao('7. Offline — não grava cego e não perde nada');
     const I = await abrirAparelho('Celular7');
     I.estado.offline = true;
     lancar(I, 'Fixa', 'Internet', 120); await assentar(I);
@@ -342,7 +357,7 @@ function secaoApresentacao() {
     check('ao voltar, o item offline sobe', naNuvem('fixas').includes('Internet'), naNuvem('fixas'));
     check('e o que o outro aparelho criou no intervalo continua lá', naNuvem('fixas').includes('Água'), naNuvem('fixas'));
 
-    secao('8. Importar backup = restauração autoritativa');
+    await drenar(); secao('8. Importar backup = restauração autoritativa');
     const backup = JSON.stringify({ rendas: [{ name: 'Salário Novo', amount: 7000 }], fixas: [{ name: 'Aluguel', amount: 1500 }], categorias: ['Casa'], cartoes: ['Nubank'] });
     const J = await abrirAparelho('PC3');
     ler(J, `(function(){ appData = normalizarAppData(JSON.parse(${JSON.stringify(backup)})); _syncCarimbar(); _syncRestaurar(); salvarDados(); })()`);
@@ -352,18 +367,18 @@ function secaoApresentacao() {
     check('outro aparelho converge para o backup', nomes(K, 'appData.fixas') === 'Aluguel', nomes(K, 'appData.fixas'));
     check('o importado não é reapagado por tombstone antigo', ler(K, 'appData.fixas.length') === 1 && ler(K, "appData.fixas[0].name") === 'Aluguel');
 
-    secao('9. Apagar todos os dados propaga (não volta na fusão)');
+    await drenar(); secao('9. Apagar todos os dados propaga (não volta na fusão)');
     ler(J, 'appData = normalizarAppData({}); salvarDados();'); await assentar(J);
     check('nuvem ficou sem lançamentos', naNuvem('fixas').length === 0 && naNuvem('rendas').length === 0, { fixas: naNuvem('fixas'), rendas: naNuvem('rendas') });
     const L = await abrirAparelho('Celular9');
     check('aparelho novo também abre vazio', ler(L, 'appData.fixas.length + appData.rendas.length') === 0, ler(L, 'appData.fixas.length + appData.rendas.length'));
 
-    secao('10. Gate r68b — toda coleção sincronizada está registrada');
+    await drenar(); secao('10. Gate r68b — toda coleção sincronizada está registrada');
     check('_syncColecoesNaoRegistradas() = []', JSON.stringify(ler(L, '_syncColecoesNaoRegistradas()')) === '[]', ler(L, 'JSON.stringify(_syncColecoesNaoRegistradas())'));
     check('as 7 coleções com id estão inscritas', ler(L, 'SYNC_COLECOES.length') === 7, ler(L, 'SYNC_COLECOES.join()'));
     check('merge é o caminho único (salvarNoSupabase → sincronizarSupabase)', /sincronizarSupabase/.test(ler(L, 'String(salvarNoSupabase)')) && /sincronizarSupabase/.test(ler(L, 'String(carregarDoSupabase)')));
 
-    secao('11. Regressão — app segue funcionando');
+    await drenar(); secao('11. Regressão — app segue funcionando');
     check('form monta e aceita lançamento', (lancar(L, 'Renda', 'Teste', 10), ler(L, "appData.rendas.some(x=>x.name==='Teste')")));
     await assentar(L);
     check('itens carimbados com id e updatedAt', ler(L, 'appData.rendas.every(x=>x.id && typeof x.updatedAt==="number" && x.updatedAt>0)'));
@@ -374,7 +389,7 @@ function secaoApresentacao() {
     check('modo escuro cobre a barra de meta (r67)', /html\.dark \.goal-progress-bar/.test(htmlBase));
     check('§24: .limit-input tem 16px no mobile', /@media \(max-width: 767px\) \{ \.limit-input \{[^}]*font-size: 16px/.test(htmlBase));
 
-    secao('12. Cross-check estático (§35)');
+    await drenar(); secao('12. Cross-check estático (§35)');
     const idsUsados = [...htmlBase.matchAll(/getElementById\('([^']+)'\)/g)].map(m => m[1]);
     const idsDecl   = new Set([...htmlBase.matchAll(/\bid="([^"]+)"/g)].map(m => m[1])
                         .concat([...htmlBase.matchAll(/\.id\s*=\s*'([^']+)'/g)].map(m => m[1])));   // id atribuído em JS
@@ -397,7 +412,7 @@ function secaoApresentacao() {
     const inlineComEsc = [...htmlBase.matchAll(/on(?:click|change)="[A-Za-z_$][\w$]*\('\$\{esc\(/g)].length;
     check('nenhum handler inline interpola nome com esc() cru (use escJs)', inlineComEsc === 0, inlineComEsc);
 
-    secao('13. Migração do blob LEGADO (sem id) nos dois aparelhos');
+    await drenar(); secao('13. Migração do blob LEGADO (sem id) nos dois aparelhos');
     // Estado real de hoje: payload v4.11.3 sem id/updatedAt, igual na nuvem e no localStorage dos 2 aparelhos.
     const legado = { rendas: [{ name: 'Salário', amount: 5000 }], fixas: [{ name: 'Aluguel', amount: 1500 }, { name: 'Luz', amount: 150 }], faturas: [{ card: 'Nubank', name: 'Mercado', category: 'Alimentação', amount: 300, curr: 1, total: 3, mesInicio: 'Jul/26' }], dividas: [], categorias: ['Alimentação', 'Transporte'], cartoes: ['Nubank'] };
     nuvem.payload = JSON.parse(JSON.stringify(legado));
@@ -410,7 +425,7 @@ function secaoApresentacao() {
     lancar(N, 'Fixa', 'Água', 80); await assentar(N);
     check('lançamento novo após a migração não duplica os legados', naNuvem('fixas').length === 3, naNuvem('fixas'));
 
-    secao('14. Convivência com aparelho ainda na versão ANTIGA (rollout, r65b)');
+    await drenar(); secao('14. Convivência com aparelho ainda na versão ANTIGA (rollout, r65b)');
     let antigoHtml = null;
     try { antigoHtml = fs.readFileSync('baseline.html', 'utf8').replace(/<script src="https:\/\/[^"]*"><\/script>/g, ''); } catch (e) {}
     if (!antigoHtml) { console.log('  ⚠ pulado — sem baseline.html (rode: git show <commit-anterior>:mgc-financas.html > baseline.html)'); }
@@ -434,7 +449,7 @@ function secaoApresentacao() {
         [O, P, O2, P2].forEach(x => x.dom.window.close());
     }
 
-    secao('15. Versão exibida vem da constante embutida (r38/r72a)');
+    await drenar(); secao('15. Versão exibida vem da constante embutida (r38/r72a)');
     // O estado inicial NÃO pode conter a versão: com o placeholder antigo (`v4.3.0` no HTML)
     // a asserção do rodapé passava sozinha, com o mecanismo desligado — teste verde de graça.
     const espelhos = [...htmlBase.matchAll(/id="(appVersion|appVersionFooter)"[^>]*>([^<]*)</g)].map(m => [m[1], m[2]]);
@@ -452,7 +467,7 @@ function secaoApresentacao() {
         check('CHANGELOG e badge do README batem com a APP_VERSION', !!chg && !!bdg && chg[1] === vApp && bdg[1] === vApp, { app: vApp, changelog: chg && chg[1], badge: bdg && bdg[1] });
     }
 
-    secao('16. Mês do filtro é o padrão do formulário (lançar retroativo)');
+    await drenar(); secao('16. Mês do filtro é o padrão do formulário (lançar retroativo)');
     const trocarFiltro = (ap, mes) => {
         const f = ap.w.document.getElementById('filterMonth');
         f.value = mes;
@@ -474,7 +489,7 @@ function secaoApresentacao() {
     ler(L, 'fecharFormSheet()');
     check('todo mês do filtro existe como opção no formulário', ler(L, "(function(){const f=[...document.getElementById('filterMonth').options].map(o=>o.value).filter(v=>v!=='Todos');const n=new Set([...document.getElementById('newMonth').options].map(o=>o.value));return f.every(v=>n.has(v));})()"));
 
-    secao('17. Renda extra aparece SÓ no mês em que foi lançada');
+    await drenar(); secao('17. Renda extra aparece SÓ no mês em que foi lançada');
     const mesFuturo   = ler(L, 'monthNames[HISTORY_COUNT+1]');
     const corpoRendas = () => String(ler(L, "(document.getElementById('rendasBody')||{}).innerHTML") || '');
     trocarFiltro(L, mesFuturo);
@@ -490,7 +505,7 @@ function secaoApresentacao() {
     check('"Todos os Meses" lista todas (dá para editar/remover as demais)', corpoRendas().includes('Bônus futuro') && corpoRendas().includes('Esquecido 1'));
     trocarFiltro(L, mesAtual);
 
-    secao('18. Trazer déficit — desmarcar PERSISTE (não volta da nuvem)');
+    await drenar(); secao('18. Trazer déficit — desmarcar PERSISTE (não volta da nuvem)');
     const carryNuvem = m => ((nuvem.payload && nuvem.payload.carryForward) || {})[m];
     ler(L, `planToggleCarry('${mesFuturo}')`); await assentar(L);
     check('marcar publica o mês na nuvem', carryNuvem(mesFuturo) === true, nuvem.payload.carryForward);
@@ -509,7 +524,7 @@ function secaoApresentacao() {
     const corpoCarry = String(ler(Q, "(document.getElementById('planCarryBody')||{}).innerHTML") || '');
     check('o painel monta e nenhum checkbox nasce marcado', /planToggleCarry\(/.test(corpoCarry) && !/checked/.test(corpoCarry), corpoCarry.slice(0, 160));
 
-    secao('19. Sugestões de descrição — remover limpa o autocomplete e propaga');
+    await drenar(); secao('19. Sugestões de descrição — remover limpa o autocomplete e propaga');
     const opcoesDesc = ap => String(ler(ap, "(document.getElementById('descSugestoes')||{}).innerHTML") || '');
     lancar(L, 'Fixa', 'Mercadoo', 50); await assentar(L);      // descrição digitada errado
     check('a descrição digitada entra no autocomplete', opcoesDesc(L).includes('Mercadoo'), opcoesDesc(L).length);
@@ -530,7 +545,7 @@ function secaoApresentacao() {
     check('limpar todas esvazia o autocomplete', opcoesDesc(S) === '', opcoesDesc(S));
     check('e limpar sugestão não apagou lançamento nenhum', ler(S, "appData.fixas.some(x=>x.name==='Mercadoo')"), ler(S, 'appData.fixas.length'));
 
-    secao('20. Limite de categoria — limpar PERSISTE e não vira alerta fantasma');
+    await drenar(); secao('20. Limite de categoria — limpar PERSISTE e não vira alerta fantasma');
     // Mesma armadilha do carryForward (§15): `delete` num mapa sincronizado não apaga nada,
     // a nuvem repõe o limite na fusão seguinte. Limpar grava 0 — e aí o 0 tem de ser lido
     // como "sem limite", senão TODA categoria com gasto passa a estourar um limite de zero.
@@ -560,7 +575,7 @@ function secaoApresentacao() {
     check('outro aparelho abre com o limite limpo (não volta da nuvem)', !ler(T, `appData.limites['${catLim}']`), ler(T, 'JSON.stringify(appData.limites)'));
     check('e sem alerta fantasma no aparelho novo', alertaVisivel(T) === false, ler(T, "document.getElementById('alertChips').innerHTML"));
 
-    secao('21. Nome com apóstrofo — o handler inline sobrevive ao HTML');
+    await drenar(); secao('21. Nome com apóstrofo — o handler inline sobrevive ao HTML');
     // O nome entra num literal JS DENTRO de um atributo: o parser de HTML decodifica &#39;
     // de volta para ' ANTES de o JS ser compilado. Só o esc() deixa o handler inválido e o
     // botão morre em silêncio (sem erro visível). A asserção estática da §12 é um lint — não
@@ -579,7 +594,7 @@ function secaoApresentacao() {
     ler(U, `(${btnApos('#descricoesList')}||{}).click && ${btnApos('#descricoesList')}.click()`); await assentar(U);
     check('e a sugestão com apóstrofo também sai pelo botão', !String(ler(U, "document.getElementById('descSugestoes').innerHTML") || '').match(/d.água/), ler(U, "document.getElementById('descSugestoes').innerHTML"));
 
-    secao('22. Coluna Ações presa à direita (Detalhamento de Faturas)');
+    await drenar(); secao('22. Coluna Ações presa à direita (Detalhamento de Faturas)');
     // A coluna fica depois de 36 colunas de mês; editar exigia arrastar a barra até o fim.
     // Fixar à direita resolve SEM reordenar o DOM — e é isso que estas asserções protegem:
     // se alguém "melhorar" movendo a coluna de lugar, o colspan e os índices do auto-scroll
@@ -617,7 +632,7 @@ function secaoApresentacao() {
     // a decisão de mobile virou regra: no celular 355px já ficam congelados numa tela de ~390px
     check('a fixação vale só a partir de 768px (mobile intacto)', /@media\s*\(min-width:\s*768px\)\s*\{[^@]*\.fat-sr/.test(htmlBase));
 
-    secao('23. Dia da compra — campo pegajoso, sem data inventada');
+    await drenar(); secao('23. Dia da compra — campo pegajoso, sem data inventada');
     // r74a: PASSO QUE DIRIGE o app também tem de tolerar nó ausente. A 1ª versão fazia
     // `d.getElementById('newDia').value = …` cru e, contra o código anterior (sem o campo),
     // estourou e MATOU o harness — as seções 23 e 24 nem apareceram, que é indistinguível
@@ -660,7 +675,7 @@ function secaoApresentacao() {
     ler(L, `document.getElementById('newType').value=getCartoes()[0]; toggleFormFields();`);
     check('e volta para cartão', ler(L, "document.getElementById('divNewDia').style.display") !== 'none');
 
-    secao('24. Preencher datas em massa — escreve na compra CERTA');
+    await drenar(); secao('24. Preencher datas em massa — escreve na compra CERTA');
     // A lista do modal é FILTRADA por mês. Gravar pela posição da lista escreveria
     // na fatura errada — por isso o índice original viaja no data-fat de cada campo.
     comprar(L, 'Antiga mes passado', 55, mesAnt); await assentar(L);
@@ -701,7 +716,7 @@ function secaoApresentacao() {
     check('e a limpeza também propaga (não volta da nuvem)', !ler(W, "!!(appData.faturas.find(f=>f.name==='Antiga A')||{}).dia"), fat(W, 'Antiga A'));
     check('o CSV exporta a coluna Dia', /Mês Início,Dia/.test(htmlBase) && /f\.mesInicio \|\| ''\},\$\{f\.dia \|\| ''\}/.test(htmlBase));
 
-    secao('25. Vigência — alterar renda/fixa NÃO reescreve o passado');
+    await drenar(); secao('25. Vigência — alterar renda/fixa NÃO reescreve o passado');
     // Cenário LIMPO: a nuvem falsa é compartilhada por todos os aparelhos do harness, e sem
     // zerá-la o aparelho novo funde o acumulado das seções anteriores e os números não fecham.
     const blobVig = {
@@ -778,7 +793,7 @@ function secaoApresentacao() {
     check('e calcula o mesmo histórico', ler(Y, `_rendaArr[${iAgora - 1}]`) === 5000 && ler(Y, `_rendaArr[${iAgora}]`) === 6500);
     check('CSV exporta Início e Fim', /Nome,Valor,Início,Fim/.test(htmlBase));
 
-    secao('26. Auditoria dos cards — o que está NA TELA tem de fechar');
+    await drenar(); secao('26. Auditoria dos cards — o que está NA TELA tem de fechar');
     // Estas asserções leem o TEXTO RENDERIZADO, não as variáveis: o defeito relatado pelo
     // usuário era exatamente um número certo por dentro e velho na tela (trocar o mês
     // chamava só renderDashboard, e os escalares de renda/fixa eram definidos na outra
@@ -837,7 +852,7 @@ function secaoApresentacao() {
         return !/^\s*(TOTAL_FIXED|RENDA_MENSAL)\s*=/m.test(corpo);
     })());
 
-    secao('27. Compras nos Cartões — 3 modos e parcela que se propaga');
+    await drenar(); secao('27. Compras nos Cartões — 3 modos e parcela que se propaga');
     // O stub de Chart guarda a config em w.__charts; localizamos o gráfico pelo título do
     // eixo X ('dia do mês' nas visões diárias, 'mês' na mensal) — nenhum outro o define.
     const cfgCompras = ap => {
@@ -914,7 +929,7 @@ function secaoApresentacao() {
     check('o gráfico está isolado por _safeRender (r63)', /_safeRender\(\(\) => renderComprasDiaChart/.test(htmlBase));
 
 
-    secao('28. Clicar na coluna abre as compras daquele ponto');
+    await drenar(); secao('28. Clicar na coluna abre as compras daquele ponto');
     // O cenário do Z (seção 27) segue de pé: à vista 100 no dia 5, TV 3x de 100 no dia 20,
     // e uma sem dia. A lógica é função pura (`_comprasDoPonto`), então dá para exercitar o
     // conteúdo do modal sem simular clique — o clique em si é conferido pela config do Chart.
@@ -988,7 +1003,7 @@ function secaoApresentacao() {
         await assentar(ap);
     };
 
-    secao('29. O relato — editar num aparelho com outro aberto, em cada tipo de dado');
+    await drenar(); secao('29. O relato — editar num aparelho com outro aberto, em cada tipo de dado');
     // r71b: um laço pelas variantes, não só a que apareceu no relato. Cada edição entra pela mesma
     // função que o botão da tela chama; a coleção com carimbo por item é a referência (nunca perdeu).
     const VARIANTES = [
@@ -1070,7 +1085,7 @@ function secaoApresentacao() {
         W.dom.window.close(); M.dom.window.close();
     }
 
-    secao('30. Abrir o app não é editar — sem escrita à toa nem pingue-pongue');
+    await drenar(); secao('30. Abrir o app não é editar — sem escrita à toa nem pingue-pongue');
     {
         const W = await cenaComDados();
         const e0 = nuvem.escritas, rev0 = nuvem.updated_at;
@@ -1101,7 +1116,7 @@ function secaoApresentacao() {
         W.dom.window.close(); M.dom.window.close();
     }
 
-    secao('31. Relógios fora de sincronia — quem edita depois de ver, vence');
+    await drenar(); secao('31. Relógios fora de sincronia — quem edita depois de ver, vence');
     {   // a prova de capacidade do arreio vem primeiro (r117): o Mac tem de estar MESMO adiantado
         let W = await cenaComDados();
         let M = await abrirComSkew('Mac-adiantado', 3 * 60 * 1000);
@@ -1130,7 +1145,7 @@ function secaoApresentacao() {
         W.dom.window.close(); M.dom.window.close();
     }
 
-    secao('32. Corrida — dois aparelhos gravando ao mesmo tempo');
+    await drenar(); secao('32. Corrida — dois aparelhos gravando ao mesmo tempo');
     {
         const W = await cenaComDados();
         const M = await abrirAparelho('Mac');
@@ -1155,7 +1170,7 @@ function secaoApresentacao() {
         W.dom.window.close(); M.dom.window.close();
     }
 
-    secao('33. Voltar à janela aberta — a tela acompanha a nuvem');
+    await drenar(); secao('33. Voltar à janela aberta — a tela acompanha a nuvem');
     {
         const W = await cenaComDados();
         const M = await abrirAparelho('Mac');
@@ -1209,7 +1224,7 @@ function secaoApresentacao() {
         W.dom.window.close(); M.dom.window.close();
     }
 
-    secao('34. Tela aberta enquanto a nuvem funde — vale o item, não a posição');
+    await drenar(); secao('34. Tela aberta enquanto a nuvem funde — vale o item, não a posição');
     {   // modal de edição: o item acima dele some pela fusão → a posição aponta para outro
         let W = await cenaComDados();
         lancar(W, 'Fixa', 'Água', 50); await assentar(W);
@@ -1279,7 +1294,7 @@ function secaoApresentacao() {
         W.dom.window.close(); M.dom.window.close();
     }
 
-    secao('35. Leitura ruim nunca vira escrita');
+    await drenar(); secao('35. Leitura ruim nunca vira escrita');
     {
         const W = await cenaComDados();
         const eBase = nuvem.escritas, cBase = clonar(nuvem.payload);
@@ -1302,7 +1317,7 @@ function secaoApresentacao() {
         W.dom.window.close();
     }
 
-    secao('36. Service worker — resposta da nuvem nunca sai do cache');
+    await drenar(); secao('36. Service worker — resposta da nuvem nunca sai do cache');
     {   // Roda o sw.js de verdade num vm, com caches/fetch falsos: é comportamento, não texto (r78c).
         const vm = require('vm');
         const swPath = path.join(path.dirname(ARQ) || '.', 'sw.js');
@@ -1310,27 +1325,44 @@ function secaoApresentacao() {
         check('sw.js encontrado ao lado do app', !!swSrc);
         const ouvintes = {};
         const armazem = new Map();
-        let redeFora = false, proximaResposta = null;
+        let redeFora = false, proximaResposta = null, pendurar = null;
         const respostaBoa = () => ({ ok: true, type: 'basic', status: 200, clone() { return this; }, marca: 'rede' });
+        const timers = [];   // relógio na mão do teste: o tempo-limite dispara quando o teste manda (r147c)
         const sb = {
             self: null, URL, Promise, console,
+            setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+            Response: class { constructor(corpo, o = {}) { this.status = o.status || 200; this.ok = this.status < 300; this.type = 'default'; this.marca = 'gerada-' + this.status; } },
             addEventListener: (t, f) => { ouvintes[t] = f; },
             location: { origin: 'https://magoc25.github.io' },
             caches: {
                 open: async () => ({ put: async (r, v) => { armazem.set(r.url, v); }, addAll: async () => {} }),
-                match: async r => armazem.get(r.url), keys: async () => [], delete: async () => true,
+                match: async (r, o = {}) => {   // ignoreSearch tira a query dos DOIS lados, como o navegador
+                    if (!o.ignoreSearch) return armazem.get(r.url);
+                    const semQ = x => x.split('?')[0];
+                    for (const [k, v] of armazem) if (semQ(k) === semQ(r.url)) return v;
+                },
+                keys: async () => [], delete: async () => true,
             },
             clients: { claim: async () => {} },
-            fetch: async () => { if (redeFora) throw new TypeError('offline'); return proximaResposta || respostaBoa(); },
+            fetch: async () => { if (redeFora) throw new TypeError('offline'); if (pendurar) return pendurar; return proximaResposta || respostaBoa(); },
         };
         sb.self = sb;
         vm.createContext(sb);
         try { vm.runInContext(swSrc, sb); } catch (e) { check('sw.js executa', false, e.message); }
-        const buscar = async url => {
-            let resp = null, interceptou = false;
-            ouvintes.fetch({ request: { method: 'GET', url }, respondWith: p => { interceptou = true; resp = p; } });
-            return { interceptou, resp: interceptou ? await resp : undefined };
+        // disparar = o evento sem esperar a resposta (para o teste segurar a rede e mexer no relógio)
+        const disparar = url => {
+            let resp = null, interceptou = false; const depois = [];
+            const t0 = timers.length;
+            ouvintes.fetch({ request: { method: 'GET', url }, respondWith: p => { interceptou = true; resp = Promise.resolve(p); }, waitUntil: p => depois.push(p) });
+            return { interceptou, resp, depois: () => Promise.all(depois), estourar: () => timers.slice(t0).forEach(t => t.fn()), prazos: () => timers.slice(t0).map(t => t.ms) };
         };
+        const buscar = async url => {
+            const d = disparar(url);
+            const resp = d.interceptou ? await d.resp : undefined;
+            await d.depois();
+            return { interceptou: d.interceptou, resp };
+        };
+        const jaResolveu = async p => { let r = false; p.then(() => { r = true; }, () => { r = true; }); await new Promise(x => setImmediate(x)); return r; };
         const urlNuvem = 'https://abc.supabase.co/rest/v1/finance_data?id=eq.1&select=payload,updated_at';
         const r1 = await buscar(urlNuvem);
         check('GET da nuvem passa direto pelo service worker', r1.interceptou === false, r1.interceptou);
@@ -1353,9 +1385,66 @@ function secaoApresentacao() {
         await buscar('https://magoc25.github.io/mgc-financas/mgc-financas.html');
         proximaResposta = null;
         check('erro do servidor não apaga a cópia boa do modo offline', (armazem.get('https://magoc25.github.io/mgc-financas/mgc-financas.html') || {}).marca === 'rede');
+
+        // ── r147: sinal fraco, resposta de erro, query na URL ──
+        const APP = 'https://magoc25.github.io/mgc-financas/mgc-financas.html';
+        const guardada = (armazem.get(APP) || {}).marca;
+        {   // rede que conecta e não responde: a abertura usa a cópia em segundos, não espera o fetch desistir
+            let soltar; pendurar = new Promise(r => { soltar = r; });
+            const d = disparar(APP);
+            const esperando = !(await jaResolveu(d.resp));
+            const prazos = d.prazos();
+            d.estourar();
+            const r = await Promise.race([d.resp, new Promise(x => setTimeout(() => x('pendurou'), 50))]);
+            check('rede pendurada: a abertura espera no máximo alguns segundos e abre a cópia guardada', guardada === 'rede' && esperando && prazos.length > 0 && Math.max(...prazos) <= 5000 && r && r.marca === 'rede', { guardada, esperando, prazos, r: r && (r.marca || r) });
+            pendurar = null;
+            soltar({ ok: true, type: 'basic', status: 200, clone() { return this; }, marca: 'tardia' });
+            await Promise.race([d.depois(), new Promise(x => setTimeout(x, 50))]);
+            check('e a resposta que chega depois do tempo-limite ainda atualiza a cópia', (armazem.get(APP) || {}).marca === 'tardia', (armazem.get(APP) || {}).marca);
+        }
+        {   // 500 com cópia boa: a tela recebe a cópia, não a página de erro
+            const antes = (armazem.get(APP) || {}).marca;
+            proximaResposta = { ok: false, type: 'basic', status: 500, clone() { return this; }, marca: 'erro500' };
+            const r = await buscar(APP);
+            proximaResposta = null;
+            check('servidor com erro: abre o app pela cópia guardada, não a página de erro', !!antes && r.resp && r.resp.marca === antes, { antes, veio: r.resp && r.resp.marca });
+        }
+        {   // offline com query (link de QR, utm): a cópia do app continua achável
+            redeFora = true;
+            const r = await buscar(APP + '?origem=qr');
+            redeFora = false;
+            check('offline com ?origem=qr na URL: o app abre da cópia (ignoreSearch)', armazem.has(APP) && r.resp && r.resp.marca === (armazem.get(APP) || {}).marca, r.resp && r.resp.marca);
+        }
+        {   // no CDN a query escolhe o arquivo: não pode servir outra biblioteca no lugar
+            const CDN = 'https://cdn.jsdelivr.net/npm/chart.js';
+            redeFora = true;
+            const r = await buscar(CDN + '?v=outro').catch(() => ({ resp: undefined }));
+            redeFora = false;
+            check('no CDN, URL com query diferente NÃO recebe a cópia de outro arquivo', armazem.has(CDN) && !(r.resp && r.resp.marca === (armazem.get(CDN) || {}).marca), r.resp && r.resp.marca);
+        }
+        {   // sem cópia e rede lenta: o tempo-limite não pode virar "Offline" — espera a rede
+            const ICONE = 'https://magoc25.github.io/mgc-financas/icon-512.png';
+            armazem.delete(ICONE);
+            let soltar; pendurar = new Promise(r => { soltar = r; });
+            const d = disparar(ICONE);
+            d.estourar();
+            pendurar = null;
+            soltar({ ok: true, type: 'basic', status: 200, clone() { return this; }, marca: 'lenta' });
+            const r = await Promise.race([d.resp, new Promise(x => setTimeout(() => x('pendurou'), 50))]);
+            await Promise.race([d.depois(), new Promise(x => setTimeout(x, 50))]);
+            check('sem cópia guardada, rede lenta: espera a rede em vez de responder "Offline"', d.interceptou && r && r.marca === 'lenta', r && (r.marca || r));
+        }
+        {   // navegação redirecionada passa como veio — com cópia guardada na mesma URL, senão a asserção passa à toa
+            const RAIZ = 'https://magoc25.github.io/mgc-financas/';
+            armazem.set(RAIZ, { ok: true, type: 'basic', status: 200, marca: 'copia-raiz' });
+            proximaResposta = { ok: false, type: 'opaqueredirect', status: 0, clone() { return this; }, marca: 'redir' };
+            const r = await buscar(RAIZ);
+            proximaResposta = null;
+            check('redirecionamento (opaqueredirect) passa direto, mesmo havendo cópia', r.resp && r.resp.marca === 'redir', r.resp && r.resp.marca);
+        }
     }
 
-    secao('37. Auditoria — o resto do que a tela dizia ou gravava errado');
+    await drenar(); secao('37. Auditoria — o resto do que a tela dizia ou gravava errado');
     {
         const W = await cenaComDados();
         // ── pagamentos respeita vigência (v4.18.0) ──
@@ -1483,7 +1572,7 @@ function secaoApresentacao() {
         W.dom.window.close(); M.dom.window.close();
     }
 
-    secao('38. A linha que o próprio SQL do app cria (r125)');
+    await drenar(); secao('38. A linha que o próprio SQL do app cria (r125)');
     {   // O SQL da tela de configuração semeia a linha, e o carimbo dela vem do now() do banco:
         // com microssegundos e fuso. É o caminho de todo usuário novo, então é caso de teste.
         const seed = (htmlBase.match(/values \(1, '(\{[^']*\})'\)/) || [])[1];
@@ -1507,7 +1596,7 @@ function secaoApresentacao() {
         N1.dom.window.close();
     }
 
-    secao('39. Texto-fonte que nada mais confere');
+    await drenar(); secao('39. Texto-fonte que nada mais confere');
     {
         const bruto = fs.readFileSync(ARQ, 'utf8');
         const iCdn = bruto.indexOf('src="https://cdn.tailwindcss.com"'), iCfg = bruto.indexOf('tailwind.config =');
@@ -1518,6 +1607,7 @@ function secaoApresentacao() {
         check('nenhum carimbo de sync escrito direto com o relógio de parede', usaDataNow.length === 0, usaDataNow);
     }
 
+    await drenar();   // a rejeição da última seção chega aqui, não depois do process.exit
     relatorio();
 })().catch(e => { console.error('\nFALHA DO HARNESS:', e); process.exit(2); });
 

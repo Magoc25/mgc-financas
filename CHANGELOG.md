@@ -5,6 +5,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [4.22.1] — Novembro 2026
+
+> **O que fazer depois de atualizar:** nada. Na próxima abertura com internet o app passa a usar a versão nova sozinho.
+
+### 🐛 Correções
+- **Abrir o app com sinal fraco demorava muito.** Com uma internet que conecta mas não responde (comum no celular), o app esperava a conexão desistir, o que podia levar dezenas de segundos, mesmo tendo uma cópia guardada no aparelho. Agora ele espera no máximo uns 3,5 segundos e abre pela cópia. Se a resposta chegar depois, a cópia é atualizada para a próxima abertura.
+- **Erro passageiro do site aparecia no lugar do app.** Se o site respondesse com erro (enquanto publica uma versão, por exemplo), essa página de erro era mostrada. Agora o app abre pela cópia guardada.
+- **Link com parâmetros abria "Offline".** Sem internet, abrir o app por um endereço com `?…` no fim (de um QR Code, por exemplo) não achava a cópia guardada. Agora acha.
+
+---
+
 ## [4.22.0] — Novembro 2026
 
 > **O que fazer depois de atualizar:** feche e abra o app **em cada aparelho** (computador, celular, outras janelas). Janela aberta desde antes continua rodando a versão anterior até ser recarregada. Não precisa rodar nada no Supabase.

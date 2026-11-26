@@ -6,7 +6,7 @@ Desenvolvido por **Marlon Gomes da Costa (MGC Dev)**
 
 > ⚠️ **Este é um projeto pessoal**, desenvolvido de forma independente pelo autor. Não representa, não é financiado e não tem vínculo institucional com o IFMA ou qualquer outra organização. O autor é professor do IFMA Campus São Raimundo das Mangabeiras, mas Margem é uma iniciativa exclusivamente pessoal.
 
-[![Versão](https://img.shields.io/badge/versão-4.22.0-blue)](#changelog)
+[![Versão](https://img.shields.io/badge/versão-4.22.1-blue)](#changelog)
 [![Licença](https://img.shields.io/badge/licença-não%20comercial-orange)](#licença-e-termos-de-uso)
 [![PWA](https://img.shields.io/badge/PWA-instalável-brightgreen)](#-abrir-agora--sem-baixar-nada)
 [![PIX](https://img.shields.io/badge/apoie-PIX-brightgreen)](#apoiar-o-projeto)
@@ -224,6 +224,13 @@ O Supabase suspende projetos gratuitos depois de cerca de 7 dias **sem acesso ao
 - **Para voltar:** entre no painel do Supabase e clique em **Restore project**. Leva alguns minutos e **nada é apagado** — seus dados continuam lá.
 
 > **E aquela receita de agendar uma consulta automática (`pg_cron`) para "manter vivo"?** Ela circula bastante — inclusive esteve aqui neste README —, mas foi medida e **não funciona**: o agendamento roda *dentro* do banco, e o Supabase conta acesso ao **serviço**, não consulta interna. Um projeto com o agendamento rodando sem falhar toda semana foi suspenso do mesmo jeito. É passo inócuo; não gaste tempo com ele.
+>
+> **Já tinha agendado?** Vale remover: ele continua rodando todo dia e o banco guarda um registro de cada execução, que nunca é apagado sozinho. No **SQL Editor** do seu projeto, rode uma linha de cada vez:
+>
+> 1. `select count(*) from pg_extension where extname = 'pg_cron';` — se der **0**, não há nada agendado e acabou aqui.
+> 2. `select jobid, jobname, schedule from cron.job;` — procure `mgc-financas-keep-alive` na lista.
+> 3. `select cron.unschedule('mgc-financas-keep-alive');` — remove o agendamento (só rode se ele apareceu no passo 2).
+> 4. `delete from cron.job_run_details where jobid not in (select jobid from cron.job);` — apaga o histórico dos agendamentos que não existem mais, sem tocar nos outros.
 
 ---
 
